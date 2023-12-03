@@ -1,5 +1,5 @@
-#![feature(test)]
-#![feature(iter_array_chunks)]
+//#![feature(test)]
+//#![feature(iter_array_chunks)]
 
 use std::env;
 use std::time::SystemTime;
@@ -27,7 +27,7 @@ macro_rules! days {
 days! {
     01 => day01,
     02 => day02,
-    // 03 => day03,
+    03 => day03,
     // 04 => day04,
     // 05 => day05,
     // 06 => day06,
