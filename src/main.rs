@@ -1,5 +1,7 @@
-//#![feature(test)]
+#![feature(test)]
 //#![feature(iter_array_chunks)]
+
+extern crate test;
 
 use std::env;
 use std::time::SystemTime;
