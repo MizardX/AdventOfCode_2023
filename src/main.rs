@@ -23,6 +23,18 @@ macro_rules! days {
             let d = SystemTime::now().duration_since(start).unwrap();
             println!("Duration: {}:{:02}:{:02}.{:06}", d.as_secs()/3600, d.as_secs()/60%60, d.as_secs()%60, d.subsec_micros());
         }
+
+        #[cfg(test)]
+        mod root_tests {
+            use test::Bencher;
+
+            $(
+                #[bench]
+                fn $mod(b: &mut Bencher) {
+                    b.iter(|| crate::$mod::run());
+                }
+            )*
+        }
     };
 }
 
