@@ -26,10 +26,7 @@ fn part_1(input: &Input) -> isize {
     let mut min = isize::MAX;
     for &(mut seed) in &input.seeds {
         for mapping in &input.mappings {
-            seed = mapping
-                .iter()
-                .find_map(|r| r.apply(seed))
-                .unwrap_or(seed);
+            seed = mapping.iter().find_map(|r| r.apply(seed)).unwrap_or(seed);
         }
         min = min.min(seed);
     }
@@ -43,19 +40,25 @@ fn part_2(input: &Input) -> isize {
         .array_chunks::<2>()
         .map(|a| Range(a[0], a[0] + a[1]))
         .collect::<Vec<_>>();
-    for location in 0.. {
+    let mut location = 0;
+    loop {
         let mut cur = location;
+        let mut min_delta = Option::<isize>::None;
         for mapping in input.mappings.iter().rev() {
-            cur = mapping
-                .iter()
-                .find_map(|r| r.reverse_apply(cur))
-                .unwrap_or(cur);
+            if let Some((next, delta)) = mapping.iter().find_map(|r| r.reverse_apply(cur)) {
+                cur = next;
+                min_delta = Some(if let Some(min_delta) = min_delta {
+                    min_delta.min(delta)
+                } else {
+                    delta
+                });
+            }
         }
         if seed_ranges.iter().any(|r| r.contains(cur)) {
             return location;
         }
+        location += min_delta.unwrap_or(1);
     }
-    unreachable!()
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -95,9 +98,10 @@ impl Mapping {
         (self.start <= val && val < self.end).then_some(val + self.delta)
     }
 
-    fn reverse_apply(&self, val: isize) -> Option<isize> {
+    fn reverse_apply(&self, val: isize) -> Option<(isize, isize)> {
         let candidate = val - self.delta;
-        (self.start <= candidate && candidate < self.end).then_some(candidate)
+        (self.start <= candidate && candidate < self.end)
+            .then_some((candidate, self.end - candidate))
     }
 }
 
