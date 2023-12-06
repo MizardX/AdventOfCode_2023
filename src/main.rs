@@ -1,5 +1,6 @@
 #![feature(test)]
 //#![feature(iter_array_chunks)]
+#![feature(array_chunks)]
 
 extern crate test;
 
@@ -43,7 +44,7 @@ days! {
     02 => day02,
     03 => day03,
     04 => day04,
-    // 05 => day05,
+    05 => day05,
     // 06 => day06,
     // 07 => day07,
     // 08 => day08,
