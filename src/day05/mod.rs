@@ -25,18 +25,10 @@ pub fn run() {
 fn part_1(input: &Input) -> isize {
     let mut min = isize::MAX;
     for &(mut seed) in &input.seeds {
-        for mapping in [
-            &input.seed_to_soil,
-            &input.soil_to_fertilizer,
-            &input.fertilizer_to_water,
-            &input.water_to_light,
-            &input.light_to_temperature,
-            &input.temperature_to_humidity,
-            &input.humidity_to_location,
-        ] {
+        for mapping in &input.mappings {
             seed = mapping
                 .iter()
-                .find_map(|r| (r.start <= seed && seed < r.end).then_some(seed + r.delta))
+                .find_map(|r| r.apply(seed))
                 .unwrap_or(seed);
         }
         min = min.min(seed);
@@ -46,27 +38,24 @@ fn part_1(input: &Input) -> isize {
 
 #[allow(unused)]
 fn part_2(input: &Input) -> isize {
-    let mut min = isize::MAX;
-    for pair in input.seeds.array_chunks::<2>() {
-        for mut seed in pair[0]..pair[0] + pair[1] {
-            for mapping in [
-                &input.seed_to_soil,
-                &input.soil_to_fertilizer,
-                &input.fertilizer_to_water,
-                &input.water_to_light,
-                &input.light_to_temperature,
-                &input.temperature_to_humidity,
-                &input.humidity_to_location,
-            ] {
-                seed = mapping
-                    .iter()
-                    .find_map(|r| (r.start <= seed && seed < r.end).then_some(seed + r.delta))
-                    .unwrap_or(seed);
-            }
-            min = min.min(seed);
+    let seed_ranges = input
+        .seeds
+        .array_chunks::<2>()
+        .map(|a| Range(a[0], a[0] + a[1]))
+        .collect::<Vec<_>>();
+    for location in 0.. {
+        let mut cur = location;
+        for mapping in input.mappings.iter().rev() {
+            cur = mapping
+                .iter()
+                .find_map(|r| r.reverse_apply(cur))
+                .unwrap_or(cur);
+        }
+        if seed_ranges.iter().any(|r| r.contains(cur)) {
+            return location;
         }
     }
-    min
+    unreachable!()
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -78,6 +67,12 @@ struct Mapping {
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct Range(isize, isize);
+
+impl Range {
+    pub fn contains(&self, val: isize) -> bool {
+        self.0 <= val && val < self.1
+    }
+}
 
 impl Debug for Range {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -94,6 +89,15 @@ impl Debug for Range {
 impl Mapping {
     pub fn new(start: isize, end: isize, delta: isize) -> Self {
         Self { start, end, delta }
+    }
+
+    fn apply(&self, val: isize) -> Option<isize> {
+        (self.start <= val && val < self.end).then_some(val + self.delta)
+    }
+
+    fn reverse_apply(&self, val: isize) -> Option<isize> {
+        let candidate = val - self.delta;
+        (self.start <= candidate && candidate < self.end).then_some(candidate)
     }
 }
 
@@ -124,20 +128,20 @@ fn numfmt(x: isize) -> String {
 
 #[derive(Debug, Error)]
 enum ParseError {
+    #[error("Input is empty")]
+    EmptyInput,
     #[error("First line should start with 'Seeds:'")]
     SeedSuffix,
-    #[error("The first number, start, is missing.")]
+    #[error("The first number, source_start, is missing.")]
     MissingSource,
     #[error("The second number, destination_start, is missing.")]
     MissingDestination,
-    #[error("The third number, len, is missing.")]
+    #[error("The third number, length, is missing.")]
     MissingLen,
     #[error("One of the numbers could not be parsed as an integer: {0}")]
     NotInteger(#[from] ParseIntError),
     #[error("The line contains more values than expected")]
     ExtraneousValues,
-    #[error("Expected more headers")]
-    Incomplete,
 }
 
 impl FromStr for Mapping {
@@ -162,97 +166,36 @@ impl FromStr for Mapping {
 #[derive(Debug, Clone)]
 struct Input {
     seeds: Vec<isize>,
-    seed_to_soil: Vec<Mapping>,
-    soil_to_fertilizer: Vec<Mapping>,
-    fertilizer_to_water: Vec<Mapping>,
-    water_to_light: Vec<Mapping>,
-    light_to_temperature: Vec<Mapping>,
-    temperature_to_humidity: Vec<Mapping>,
-    humidity_to_location: Vec<Mapping>,
+    mappings: Vec<Vec<Mapping>>,
 }
 
 #[allow(unused)]
 fn parse_input(text: &str) -> Result<Input, ParseError> {
-    #[derive(Debug, Copy, Clone)]
-    enum State {
-        Seeds,
-        SeedToSoil,
-        SoilToFertilizer,
-        FertilizerToWater,
-        WaterToLight,
-        LightToTemperature,
-        TemperatureToHumidity,
-        HumidityToLocation,
-    }
+    let mut lines = text.lines();
+    let mut seeds: Vec<isize> = lines
+        .next()
+        .ok_or(ParseError::EmptyInput)?
+        .strip_prefix("seeds: ")
+        .ok_or(ParseError::SeedSuffix)?
+        .split_ascii_whitespace()
+        .map(str::parse)
+        .collect::<Result<Vec<_>, _>>()?;
 
-    let mut seeds: Vec<isize> = Vec::new();
-    let mut seed_to_soil: Vec<Mapping> = Vec::new();
-    let mut soil_to_fertilizer: Vec<Mapping> = Vec::new();
-    let mut fertilizer_to_water: Vec<Mapping> = Vec::new();
-    let mut water_to_light: Vec<Mapping> = Vec::new();
-    let mut light_to_temperature: Vec<Mapping> = Vec::new();
-    let mut temperature_to_humidity: Vec<Mapping> = Vec::new();
-    let mut humidity_to_location: Vec<Mapping> = Vec::new();
+    let mut mappings = Vec::new();
+    let mut current = Vec::new();
 
-    let mut state = State::Seeds;
-    for line in text.lines() {
-        match (state, line) {
-            (_, "") => (),
-            (State::Seeds, "seed-to-soil map:") => state = State::SeedToSoil,
-            (State::SeedToSoil, "soil-to-fertilizer map:") => state = State::SoilToFertilizer,
-            (State::SoilToFertilizer, "fertilizer-to-water map:") => {
-                state = State::FertilizerToWater;
-            }
-            (State::FertilizerToWater, "water-to-light map:") => state = State::WaterToLight,
-            (State::WaterToLight, "light-to-temperature map:") => state = State::LightToTemperature,
-            (State::LightToTemperature, "temperature-to-humidity map:") => {
-                state = State::TemperatureToHumidity;
-            }
-            (State::TemperatureToHumidity, "humidity-to-location map:") => {
-                state = State::HumidityToLocation;
-            }
-            (State::Seeds, line) => {
-                seeds = line
-                    .strip_prefix("seeds: ")
-                    .ok_or(ParseError::SeedSuffix)?
-                    .split_ascii_whitespace()
-                    .map(str::parse)
-                    .collect::<Result<Vec<_>, _>>()?;
-            }
-            (State::SeedToSoil, line) => seed_to_soil.push(Mapping::from_str(line)?),
-            (State::SoilToFertilizer, line) => soil_to_fertilizer.push(Mapping::from_str(line)?),
-            (State::FertilizerToWater, line) => fertilizer_to_water.push(Mapping::from_str(line)?),
-            (State::WaterToLight, line) => water_to_light.push(Mapping::from_str(line)?),
-            (State::LightToTemperature, line) => {
-                light_to_temperature.push(Mapping::from_str(line)?);
-            }
-            (State::TemperatureToHumidity, line) => {
-                temperature_to_humidity.push(Mapping::from_str(line)?);
-            }
-            (State::HumidityToLocation, line) => {
-                humidity_to_location.push(Mapping::from_str(line)?);
-            }
+    for line in lines {
+        if line.is_empty() {
+            continue;
+        }
+        if line.ends_with(':') {
+            current.sort_unstable();
+            mappings.push(std::mem::take(&mut current));
+        } else {
+            current.push(Mapping::from_str(line)?);
         }
     }
-    if let State::HumidityToLocation = &state {
-        seed_to_soil.sort_unstable();
-        soil_to_fertilizer.sort_unstable();
-        fertilizer_to_water.sort_unstable();
-        water_to_light.sort_unstable();
-        light_to_temperature.sort_unstable();
-        temperature_to_humidity.sort_unstable();
-        humidity_to_location.sort_unstable();
-        Ok(Input {
-            seeds,
-            seed_to_soil,
-            soil_to_fertilizer,
-            fertilizer_to_water,
-            water_to_light,
-            light_to_temperature,
-            temperature_to_humidity,
-            humidity_to_location,
-        })
-    } else {
-        Err(ParseError::Incomplete)
-    }
+    mappings.push(current);
+
+    Ok(Input { seeds, mappings })
 }
