@@ -21,8 +21,8 @@ pub fn run() {
 }
 
 #[allow(unused)]
-fn part_1(input: &mut Vec<Input>) -> u64 {
-    input.sort_unstable_by_key(|i| i.score());
+fn part_1(input: &mut [Input]) -> u64 {
+    input.sort_unstable_by_key(Input::score);
     let mut sum = 0;
     for (i, hand) in input.iter().enumerate() {
         sum += (i + 1) as u64 * hand.bet;
@@ -31,8 +31,8 @@ fn part_1(input: &mut Vec<Input>) -> u64 {
 }
 
 #[allow(unused)]
-fn part_2(input: &mut Vec<Input>) -> u64 {
-    input.sort_unstable_by_key(|i| i.score_joker());
+fn part_2(input: &mut [Input]) -> u64 {
+    input.sort_unstable_by_key(Input::score_joker);
     let mut sum = 0;
     for (i, hand) in input.iter().enumerate() {
         sum += (i + 1) as u64 * hand.bet;
@@ -115,60 +115,90 @@ struct Input {
 
 impl Input {
     pub fn classify(&self) -> HandType {
-        let mut counts = [0_u8; 14];
-        for &card in &self.cards {
-            counts[card as u8 as usize] += 1;
-        }
-        counts.sort_unstable();
-        match (counts[12], counts[13]) {
-            (_, 5) => HandType::FiveOfAKind,
-            (_, 4) => HandType::FourOfAKind,
-            (2, 3) => HandType::FullHouse,
-            (_, 3) => HandType::ThreeOfAKind,
-            (2, 2)=> HandType::TwoPairs,
-            (_, 2) => HandType::OnePair,
-            _ => HandType::HighCard,
+        let mut cards = self.cards;
+        cards.sort_unstable();
+        if cards[0] == cards[4] {
+            HandType::FiveOfAKind
+        } else if cards[0] == cards[3] || cards[1] == cards[4] {
+            HandType::FourOfAKind
+        } else if cards[0] == cards[1]
+            && cards[3] == cards[4]
+            && (cards[1] == cards[2] || cards[2] == cards[3])
+        {
+            HandType::FullHouse
+        } else if cards[0] == cards[2] || cards[1] == cards[3] || cards[2] == cards[4] {
+            HandType::ThreeOfAKind
+        } else {
+            let num_pairs = cards.windows(2).filter(|w| w[0] == w[1]).count();
+            if num_pairs == 2 {
+                HandType::TwoPairs
+            } else if num_pairs == 1 {
+                HandType::OnePair
+            } else {
+                HandType::HighCard
+            }
         }
     }
 
     pub fn classify_joker(&self) -> HandType {
-        let mut counts = [0_u8; 14];
-        for &card in &self.cards {
-            counts[card as u8 as usize] += 1;
+        let mut cards = self.cards;
+        cards.sort_unstable();
+        let mut jokers = 0;
+        for c in &cards {
+            if let Card::Jack = c {
+                jokers += 1;
+            }
         }
-        let jokers = std::mem::take(&mut counts[Card::Jack as u8 as usize]);
-        counts.sort_unstable();
-        match (counts[12], counts[13], jokers) {
-            (_, 5, _) | (_, 4, 1) | (_, 3, 2) | (_, 2, 3) | (_, _, 4 | 5) => HandType::FiveOfAKind,
-            (_, 4, _) | (_, 3, 1) | (_, 2, 2) | (_, _, 3) => HandType::FourOfAKind,
-            (2, 3, _) | (2, 2, 1) => HandType::FullHouse,
-            (_, 3, _) | (_, 2, 1) | (_, _, 2) => HandType::ThreeOfAKind,
-            (2, 2, _) => HandType::TwoPairs,
-            (_, 2, _) | (_, _, 1) => HandType::OnePair,
-            _ => HandType::HighCard,
+        if cards[0] == cards[4] {
+            HandType::FiveOfAKind
+        } else if cards[0] == cards[3] || cards[1] == cards[4] {
+            match jokers {
+                0 => HandType::FourOfAKind,
+                _ => HandType::FiveOfAKind,
+            }
+        } else if cards[0] == cards[1]
+            && cards[3] == cards[4]
+            && (cards[1] == cards[2] || cards[2] == cards[3])
+        {
+            match jokers {
+                0 => HandType::FullHouse,
+                _ => HandType::FiveOfAKind,
+            }
+        } else if cards[0] == cards[2] || cards[1] == cards[3] || cards[2] == cards[4] {
+            match jokers {
+                0 => HandType::ThreeOfAKind,
+                _ => HandType::FourOfAKind,
+            }
+        } else {
+            let num_pairs = cards.windows(2).filter(|w| w[0] == w[1]).count();
+            match (num_pairs, jokers) {
+                (2, 0) => HandType::TwoPairs,
+                (2, 1) => HandType::FullHouse,
+                (2, 2) => HandType::FourOfAKind,
+                (1, 0) | (0, 1) => HandType::OnePair,
+                (1, 1 | 2) => HandType::ThreeOfAKind,
+                _ => HandType::HighCard,
+            }
         }
     }
 
     pub fn score(&self) -> u32 {
         self.cards
             .iter()
-            .fold(self.classify() as u8 as u32, |s, &c| {
-                s * 0x10 + c as u8 as u32
+            .fold(u32::from(self.classify() as u8), |s, &c| {
+                s * 0x10 + u32::from(c as u8)
             })
     }
 
     pub fn score_joker(&self) -> u32 {
         self.cards
             .iter()
-            .fold(self.classify_joker() as u8 as u32, |s, &c| {
-                match c {
-                    Card::Jack => s * 0x10,
-                    c => s * 0x10 + (c as u8 as u32)
-                }
+            .fold(u32::from(self.classify_joker() as u8), |s, &c| match c {
+                Card::Jack => s * 0x10,
+                c => s * 0x10 + u32::from(c as u8),
             })
     }
 }
-
 
 impl FromStr for Input {
     type Err = ParseInputError;
