@@ -27,9 +27,9 @@ fn part_1(input: &[Card]) -> usize {
 fn part_2(input: &[Card]) -> usize {
     let mut counts = vec![1; input.len()];
     let mut sum = 0;
-    for (i,c) in input.iter().enumerate() {
+    for (i, c) in input.iter().enumerate() {
         let c_count = counts[i];
-        for cnt in &mut counts[i+1..=i+c.matches()] {
+        for cnt in &mut counts[i + 1..=i + c.matches()] {
             *cnt += c_count;
         }
         sum += c_count;
@@ -40,25 +40,13 @@ fn part_2(input: &[Card]) -> usize {
 #[allow(unused)]
 #[derive(Debug, Clone)]
 struct Card {
-    winning: Vec<u8>,
-    have: Vec<u8>,
+    winning: u128,
+    have: u128,
 }
 
 impl Card {
     pub fn matches(&self) -> usize {
-        let mut counts = [0; 100];
-        for &w in &self.winning {
-            counts[w as usize] += 1;
-        }
-        let mut matches = 0;
-        for &h in &self.have {
-            if counts[h as usize] == 0 {
-                continue;
-            }
-            counts[h as usize] -= 1;
-            matches += 1;
-        }
-        matches
+        (self.winning & self.have).count_ones() as _
     }
 
     pub fn score(&self) -> usize {
@@ -79,11 +67,11 @@ fn parse_input(text: &str) -> Vec<Card> {
         let winning = winning_str
             .split_ascii_whitespace()
             .flat_map(str::parse)
-            .collect::<Vec<u8>>();
+            .fold(0_u128, |s, n: u8| s | (1_u128 << n));
         let have = have_str
             .split_ascii_whitespace()
             .flat_map(str::parse)
-            .collect::<Vec<u8>>();
+            .fold(0_u128, |s, n: u8| s | (1_u128 << n));
         res.push(Card { winning, have });
     }
     res
