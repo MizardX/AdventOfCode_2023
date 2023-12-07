@@ -115,70 +115,38 @@ struct Input {
 
 impl Input {
     pub fn classify(&self) -> HandType {
-        let mut cards = self.cards;
-        cards.sort_unstable();
-        if cards[0] == cards[4] {
-            HandType::FiveOfAKind
-        } else if cards[0] == cards[3] || cards[1] == cards[4] {
-            HandType::FourOfAKind
-        } else if cards[0] == cards[1]
-            && cards[3] == cards[4]
-            && (cards[1] == cards[2] || cards[2] == cards[3])
+        match self
+            .cards
+            .map(|c| self.cards.iter().filter(|&&c1| c1 == c).count())
+            .into_iter()
+            .sum()
         {
-            HandType::FullHouse
-        } else if cards[0] == cards[2] || cards[1] == cards[3] || cards[2] == cards[4] {
-            HandType::ThreeOfAKind
-        } else {
-            let num_pairs = cards.windows(2).filter(|w| w[0] == w[1]).count();
-            if num_pairs == 2 {
-                HandType::TwoPairs
-            } else if num_pairs == 1 {
-                HandType::OnePair
-            } else {
-                HandType::HighCard
-            }
+            25 => HandType::FiveOfAKind,
+            17 => HandType::FourOfAKind,
+            13 => HandType::FullHouse,
+            11 => HandType::ThreeOfAKind,
+            9 => HandType::TwoPairs,
+            7 => HandType::OnePair,
+            5 => HandType::HighCard,
+            _ => unreachable!(),
         }
     }
 
     pub fn classify_joker(&self) -> HandType {
-        let mut cards = self.cards;
-        cards.sort_unstable();
         let mut jokers = 0;
-        for c in &cards {
+        for c in &self.cards {
             if let Card::Jack = c {
                 jokers += 1;
             }
         }
-        if cards[0] == cards[4] {
-            HandType::FiveOfAKind
-        } else if cards[0] == cards[3] || cards[1] == cards[4] {
-            match jokers {
-                0 => HandType::FourOfAKind,
-                _ => HandType::FiveOfAKind,
-            }
-        } else if cards[0] == cards[1]
-            && cards[3] == cards[4]
-            && (cards[1] == cards[2] || cards[2] == cards[3])
-        {
-            match jokers {
-                0 => HandType::FullHouse,
-                _ => HandType::FiveOfAKind,
-            }
-        } else if cards[0] == cards[2] || cards[1] == cards[3] || cards[2] == cards[4] {
-            match jokers {
-                0 => HandType::ThreeOfAKind,
-                _ => HandType::FourOfAKind,
-            }
-        } else {
-            let num_pairs = cards.windows(2).filter(|w| w[0] == w[1]).count();
-            match (num_pairs, jokers) {
-                (2, 0) => HandType::TwoPairs,
-                (2, 1) => HandType::FullHouse,
-                (2, 2) => HandType::FourOfAKind,
-                (1, 0) | (0, 1) => HandType::OnePair,
-                (1, 1 | 2) => HandType::ThreeOfAKind,
-                _ => HandType::HighCard,
-            }
+        match (self.classify(), jokers) {
+            (t, 0) => t,
+            (HandType::FiveOfAKind | HandType::FourOfAKind | HandType::FullHouse, _) => HandType::FiveOfAKind,
+            (HandType::TwoPairs, 1) => HandType::FullHouse,
+            (HandType::ThreeOfAKind | HandType::TwoPairs, _) => HandType::FourOfAKind,
+            (HandType::OnePair, _) => HandType::ThreeOfAKind,
+            (HandType::HighCard, _) => HandType::OnePair,
+            _ => unreachable!(),
         }
     }
 
