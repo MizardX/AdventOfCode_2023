@@ -1,6 +1,5 @@
 #![warn(clippy::pedantic)]
 
-use std::cmp::Ordering;
 use std::num::ParseIntError;
 use std::str::FromStr;
 
@@ -10,39 +9,33 @@ pub fn run() {
     println!(".Day 07");
 
     println!("++Example");
-    let example = parse_input(include_str!("example.txt"));
-    println!("|+-Part 1: {} (expected 6440)", part_1(&example));
-    println!("|'-Part 2: {} (expected 5905)", part_2(&example));
+    let mut example = parse_input(include_str!("example.txt"));
+    println!("|+-Part 1: {} (expected 6440)", part_1(&mut example));
+    println!("|'-Part 2: {} (expected 5905)", part_2(&mut example));
 
     println!("++Input");
-    let input = parse_input(include_str!("input.txt"));
-    println!("|+-Part 1: {} (expected 253313241)", part_1(&input));
-    println!("|'-Part 2: {} (expected 253362743)", part_2(&input));
+    let mut input = parse_input(include_str!("input.txt"));
+    println!("|+-Part 1: {} (expected 253313241)", part_1(&mut input));
+    println!("|'-Part 2: {} (expected 253362743)", part_2(&mut input));
     println!("')");
 }
 
 #[allow(unused)]
-fn part_1(input: &[Input]) -> u64 {
-    let mut hands = input.to_vec();
-    hands.sort_unstable();
+fn part_1(input: &mut Vec<Input>) -> u64 {
+    input.sort_unstable_by_key(|i| i.score());
     let mut sum = 0;
-    for (i, hand) in hands.into_iter().enumerate() {
-        sum += (i + 1) as u64 * hand.bid;
+    for (i, hand) in input.iter().enumerate() {
+        sum += (i + 1) as u64 * hand.bet;
     }
     sum
 }
 
 #[allow(unused)]
-fn part_2(input: &[Input]) -> u64 {
-    let mut hands = input
-        .into_iter()
-        .cloned()
-        .map(WithJokers)
-        .collect::<Vec<_>>();
-    hands.sort_unstable();
+fn part_2(input: &mut Vec<Input>) -> u64 {
+    input.sort_unstable_by_key(|i| i.score_joker());
     let mut sum = 0;
-    for (i, hand) in hands.into_iter().enumerate() {
-        sum += (i + 1) as u64 * hand.0.bid;
+    for (i, hand) in input.iter().enumerate() {
+        sum += (i + 1) as u64 * hand.bet;
     }
     sum
 }
@@ -63,19 +56,19 @@ enum ParseInputError {
 #[repr(u8)]
 enum Card {
     #[default]
-    Two,
-    Three,
-    Four,
-    Five,
-    Six,
-    Seven,
-    Eight,
-    Nine,
-    Ten,
-    Jack,
-    Queen,
-    King,
-    Ace,
+    Two = 1,
+    Three = 2,
+    Four = 3,
+    Five = 4,
+    Six = 5,
+    Seven = 6,
+    Eight = 7,
+    Nine = 8,
+    Ten = 9,
+    Jack = 10,
+    Queen = 11,
+    King = 12,
+    Ace = 13,
 }
 
 impl TryFrom<u8> for Card {
@@ -101,8 +94,10 @@ impl TryFrom<u8> for Card {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 enum HandType {
+    #[default]
+    None,
     HighCard,
     OnePair,
     TwoPairs,
@@ -112,37 +107,38 @@ enum HandType {
     FiveOfAKind,
 }
 
-#[derive(Debug, Clone, Default, Eq)]
+#[derive(Debug, Clone, Default)]
 struct Input {
     cards: [Card; 5],
-    bid: u64,
+    bet: u64,
 }
 
 impl Input {
     pub fn classify(&self) -> HandType {
-        let mut counts = [0; 13];
+        let mut counts = [0_u8; 14];
         for &card in &self.cards {
             counts[card as u8 as usize] += 1;
         }
         counts.sort_unstable();
-        match (counts[11], counts[12]) {
+        match (counts[12], counts[13]) {
             (_, 5) => HandType::FiveOfAKind,
             (_, 4) => HandType::FourOfAKind,
             (2, 3) => HandType::FullHouse,
             (_, 3) => HandType::ThreeOfAKind,
-            (2, 2) => HandType::TwoPairs,
+            (2, 2)=> HandType::TwoPairs,
             (_, 2) => HandType::OnePair,
             _ => HandType::HighCard,
         }
     }
+
     pub fn classify_joker(&self) -> HandType {
-        let mut counts = [0_u8; 13];
+        let mut counts = [0_u8; 14];
         for &card in &self.cards {
             counts[card as u8 as usize] += 1;
         }
         let jokers = std::mem::take(&mut counts[Card::Jack as u8 as usize]);
         counts.sort_unstable();
-        match (counts[11], counts[12], jokers) {
+        match (counts[12], counts[13], jokers) {
             (_, 5, _) | (_, 4, 1) | (_, 3, 2) | (_, 2, 3) | (_, _, 4 | 5) => HandType::FiveOfAKind,
             (_, 4, _) | (_, 3, 1) | (_, 2, 2) | (_, _, 3) => HandType::FourOfAKind,
             (2, 3, _) | (2, 2, 1) => HandType::FullHouse,
@@ -152,25 +148,27 @@ impl Input {
             _ => HandType::HighCard,
         }
     }
-}
 
-impl PartialEq for Input {
-    fn eq(&self, other: &Self) -> bool {
-        self.cards == other.cards && self.bid == other.bid
+    pub fn score(&self) -> u32 {
+        self.cards
+            .iter()
+            .fold(self.classify() as u8 as u32, |s, &c| {
+                s * 0x10 + c as u8 as u32
+            })
+    }
+
+    pub fn score_joker(&self) -> u32 {
+        self.cards
+            .iter()
+            .fold(self.classify_joker() as u8 as u32, |s, &c| {
+                match c {
+                    Card::Jack => s * 0x10,
+                    c => s * 0x10 + (c as u8 as u32)
+                }
+            })
     }
 }
 
-impl Ord for Input {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        (self.classify(), self.cards).cmp(&(other.classify(), other.cards))
-    }
-}
-
-impl PartialOrd for Input {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
 
 impl FromStr for Input {
     type Err = ParseInputError;
@@ -187,38 +185,8 @@ impl FromStr for Input {
         if bytes[5] != b' ' {
             return Err(ParseInputError::MissingSeparator);
         }
-        res.bid = s[6..].parse()?;
+        res.bet = s[6..].parse()?;
         Ok(res)
-    }
-}
-
-#[derive(Debug, Clone, Default, Eq, PartialEq)]
-struct WithJokers(Input);
-
-impl Ord for WithJokers {
-    fn cmp(&self, other: &Self) -> Ordering {
-        let cmp = self.0.classify_joker().cmp(&other.0.classify_joker());
-        if cmp.is_ne() {
-            return cmp;
-        }
-        self.0
-            .cards
-            .iter()
-            .zip(other.0.cards.iter())
-            .map(|(a, b)| match (a, b) {
-                (Card::Jack, Card::Jack) => Ordering::Equal,
-                (Card::Jack, _) => Ordering::Less,
-                (_, Card::Jack) => Ordering::Greater,
-                (a, b) => a.cmp(b),
-            })
-            .find(|o| o.is_ne())
-            .unwrap_or(Ordering::Equal)
-    }
-}
-
-impl PartialOrd for WithJokers {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
     }
 }
 
