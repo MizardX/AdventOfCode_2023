@@ -82,15 +82,11 @@ where
 
 fn distance_to_end(input: &Input, start_ix: usize) -> usize {
     let mut ix = start_ix;
-    for (i, mov) in input
-        .instructions
-        .iter()
-        .copied()
-        .cycle()
-        .enumerate()
-    {
+    for (i, mov) in input.instructions.iter().copied().cycle().enumerate() {
         let node = &input.nodes[ix];
-        if node.is_end { return i; }
+        if node.is_end {
+            return i;
+        }
         ix = match mov {
             Dir::Left => node.left_ix,
             Dir::Right => node.right_ix,
@@ -107,6 +103,10 @@ enum ParseError {
     InvalidInstruction(char),
     #[error("Missing blank separator line")]
     MissingSeparatorLine,
+    #[error("Node line does not match 'NAME = (NAME, NAME)'")]
+    NodeSyntaxError,
+    #[error("Node not found")]
+    NodeNotFound,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -163,9 +163,9 @@ impl FromStr for Input {
         let mut lookup = HashMap::new();
         let mut nodes = Vec::new();
         for line in lines.clone() {
-            let (name, line) = line.split_once(" = (").unwrap();
-            let (left, line) = line.split_once(", ").unwrap();
-            let right = line.strip_suffix(')').unwrap();
+            let (name, line) = line.split_once(" = (").ok_or(ParseError::NodeSyntaxError)?;
+            let (left, line) = line.split_once(", ").ok_or(ParseError::NodeSyntaxError)?;
+            let right = line.strip_suffix(')').ok_or(ParseError::NodeSyntaxError)?;
             let mut node = Node::default();
             let ix = nodes.len();
             node.name = name.to_string();
@@ -176,9 +176,11 @@ impl FromStr for Input {
         let mut end_ix = usize::MAX;
         let mut start_ixs = Vec::new();
         for (ix, node) in nodes.iter_mut().enumerate() {
-            let (_, left, right) = lookup.get(node.name.as_str()).expect("Node found");
-            node.left_ix = lookup.get(left).expect("Left node found").0;
-            node.right_ix = lookup.get(right).expect("Right node found").0;
+            let &(_, left, right) = lookup
+                .get(node.name.as_str())
+                .ok_or(ParseError::NodeNotFound)?;
+            node.left_ix = lookup.get(left).ok_or(ParseError::NodeNotFound)?.0;
+            node.right_ix = lookup.get(right).ok_or(ParseError::NodeNotFound)?.0;
             if node.name.ends_with('A') {
                 if node.name.eq("AAA") {
                     start_ix = ix;
