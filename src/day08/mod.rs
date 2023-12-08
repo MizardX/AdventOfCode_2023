@@ -2,7 +2,6 @@
 
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::collections::hash_map::Entry;
 
 use num_traits::Num;
 
@@ -55,10 +54,8 @@ fn part_1(input: &Input) -> usize {
 fn part_2(input: &Input) -> u64 {
     let mut res = 1;
     for &start_ix in &input.start_ixs {
-        let (start, len) = find_cycle(input, start_ix);
-        // shortcut assumption
-        assert_eq!(start, len);
-        res = lcm(res, len as u64);
+        let dist = distance_to_end(input, start_ix);
+        res = lcm(res, dist as u64);
     }
     res
 }
@@ -83,28 +80,20 @@ where
     a * b / gcd(a, b)
 }
 
-fn find_cycle(input: &Input, start_ix: usize) -> (usize, usize) {
-    let mut visited = HashMap::new();
+fn distance_to_end(input: &Input, start_ix: usize) -> usize {
     let mut ix = start_ix;
-    let mut end_dist = 0;
-    for (i_global, (i_local, mov)) in input
+    for (i, mov) in input
         .instructions
         .iter()
         .copied()
-        .enumerate()
         .cycle()
         .enumerate()
     {
-        match visited.entry((i_local, ix)) {
-            Entry::Occupied(o) => return (end_dist, i_global - *o.get()),
-            Entry::Vacant(v) => v.insert(i_global),
-        };
-        if input.nodes[ix].is_end {
-            end_dist = i_global;
-        }
+        let node = &input.nodes[ix];
+        if node.is_end { return i; }
         ix = match mov {
-            Dir::Left => input.nodes[ix].left_ix,
-            Dir::Right => input.nodes[ix].right_ix,
+            Dir::Left => node.left_ix,
+            Dir::Right => node.right_ix,
         };
     }
     unreachable!()
