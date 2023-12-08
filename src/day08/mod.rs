@@ -2,6 +2,9 @@
 
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::collections::hash_map::Entry;
+
+use num_traits::Num;
 
 use thiserror::Error;
 
@@ -9,21 +12,27 @@ pub fn run() {
     println!(".Day 07");
 
     println!("++Example1");
-    let example = include_str!("example1.txt").parse().expect("Parse example 1");
+    let example = include_str!("example1.txt")
+        .parse()
+        .expect("Parse example 1");
     println!("|+-Part 1: {} (expected 2)", part_1(&example));
 
     println!("++Example2");
-    let example = include_str!("example2.txt").parse().expect("Parse example 1");
+    let example = include_str!("example2.txt")
+        .parse()
+        .expect("Parse example 1");
     println!("|+-Part 1: {} (expected 6)", part_1(&example));
 
     println!("++Example3");
-    let example = include_str!("example3.txt").parse().expect("Parse example 3");
+    let example = include_str!("example3.txt")
+        .parse()
+        .expect("Parse example 3");
     println!("|+-Part 2: {} (expected 6)", part_2(&example));
 
     println!("++Input");
     let input = include_str!("input.txt").parse().expect("Real input");
     println!("|+-Part 1: {} (expected 15517)", part_1(&input));
-    println!("|'-Part 2: {} (expected XXX)", part_2(&input));
+    println!("|'-Part 2: {} (expected 14935034899483)", part_2(&input));
     println!("')");
 }
 
@@ -43,19 +52,60 @@ fn part_1(input: &Input) -> usize {
 }
 
 #[allow(unused)]
-fn part_2(input: &Input) -> usize {
-    let mut cur = input.start_ixs.clone();
-    for (i, mov) in input.instructions.iter().copied().cycle().enumerate() {
-        let mut all_end = true;
-        for ix in &mut cur {
-            let node = &input.nodes[*ix];
-            all_end &= node.is_end;
-            *ix = match mov {
-                Dir::Left => node.left_ix,
-                Dir::Right => node.right_ix,
-            };
+fn part_2(input: &Input) -> u64 {
+    let mut res = 1;
+    for &start_ix in &input.start_ixs {
+        let (start, len) = find_cycle(input, start_ix);
+        // shortcut assumption
+        assert_eq!(start, len);
+        res = lcm(res, len as u64);
+    }
+    res
+}
+
+fn gcd<T>(mut a: T, mut b: T) -> T
+where
+    T: Copy + Num,
+{
+    let zero = T::zero();
+    while a != zero {
+        let r = b % a;
+        b = a;
+        a = r;
+    }
+    b
+}
+
+fn lcm<T>(a: T, b: T) -> T
+where
+    T: Copy + Num,
+{
+    a * b / gcd(a, b)
+}
+
+fn find_cycle(input: &Input, start_ix: usize) -> (usize, usize) {
+    let mut visited = HashMap::new();
+    let mut ix = start_ix;
+    let mut end_dist = 0;
+    for (i_global, (i_local, mov)) in input
+        .instructions
+        .iter()
+        .copied()
+        .enumerate()
+        .cycle()
+        .enumerate()
+    {
+        match visited.entry((i_local, ix)) {
+            Entry::Occupied(o) => return (end_dist, i_global - *o.get()),
+            Entry::Vacant(v) => v.insert(i_global),
+        };
+        if input.nodes[ix].is_end {
+            end_dist = i_global;
         }
-        if all_end { return i; }
+        ix = match mov {
+            Dir::Left => input.nodes[ix].left_ix,
+            Dir::Right => input.nodes[ix].right_ix,
+        };
     }
     unreachable!()
 }
