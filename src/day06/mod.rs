@@ -2,16 +2,19 @@
 
 use std::num::ParseIntError;
 
+const EXAMPLE: &str = include_str!("example.txt");
+const INPUT: &str = include_str!("input.txt");
+
 pub fn run() {
     println!(".Day 06");
 
     println!("++Example");
-    let example = parse_input(include_str!("example.txt"));
+    let example = parse_input(EXAMPLE);
     println!("|+-Part 1: {} (expected 288)", part_1(&example));
     println!("|'-Part 2: {} (expected 71503)", part_2(&example));
 
     println!("++Input");
-    let input = parse_input(include_str!("input.txt"));
+    let input = parse_input(INPUT);
     println!("|+-Part 1: {} (expected 4403592)", part_1(&input));
     println!("|'-Part 2: {} (expected 38017587)", part_2(&input));
     println!("')");
@@ -92,4 +95,31 @@ fn parse_input(text: &str) -> Input {
         .collect::<Vec<_>>();
     
     Input { races }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use std::hint::black_box;
+
+    use super::*;
+    use test::Bencher;
+
+
+    #[bench]
+    fn run_parse_input(b: &mut Bencher) {
+        b.iter(|| black_box(parse_input(INPUT)));
+    }
+
+    #[bench]
+    fn run_part_1(b: &mut Bencher) {
+        let input = parse_input(INPUT);
+        b.iter(|| black_box(part_1(&input)));
+    }
+
+    #[bench]
+    fn run_part_2(b: &mut Bencher) {
+        let input = parse_input(INPUT);
+        b.iter(|| black_box(part_2(&input)));
+    }
 }
