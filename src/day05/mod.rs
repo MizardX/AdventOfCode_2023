@@ -1,20 +1,24 @@
 #![warn(clippy::pedantic)]
 
+use std::cmp::Ordering;
 use std::fmt::Debug;
 use std::num::ParseIntError;
 use std::str::FromStr;
 use thiserror::Error;
 
+const EXAMPLE: &str = include_str!("example.txt");
+const INPUT: &str = include_str!("input.txt");
+
 pub fn run() {
     println!(".Day 05");
 
     println!("++Example");
-    let example = parse_input(include_str!("example.txt")).expect("Example input parsed");
+    let example = parse_input(EXAMPLE).expect("Example input parsed");
     println!("|+-Part 1: {} (expected 35)", part_1(&example));
     println!("|'-Part 2: {} (expected 46)", part_2(&example));
 
     println!("++Input");
-    let input = parse_input(include_str!("input.txt")).expect("Real input parsed");
+    let input = parse_input(INPUT).expect("Real input parsed");
     println!("|+-Part 1: {} (expected 174137457)", part_1(&input));
     println!("|'-Part 2: {} (expected 1493866)", part_2(&input));
 
@@ -202,4 +206,33 @@ fn parse_input(text: &str) -> Result<Input, ParseError> {
     mappings.push(current);
 
     Ok(Input { seeds, mappings })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use test::Bencher;
+
+    #[bench]
+    fn bench_parse_input(b: &mut Bencher) {
+        b.iter(|| {
+            std::hint::black_box(parse_input(include_str!("input.txt")).unwrap());
+        });
+    }
+
+    #[bench]
+    fn bench_part_1(b: &mut Bencher) {
+        let input = parse_input(INPUT).expect("Real input parsed");
+        b.iter(|| {
+            std::hint::black_box(part_1(&input));
+        });
+    }
+
+    #[bench]
+    fn bench_part_2(b: &mut Bencher) {
+        let input = parse_input(INPUT).expect("Real input parsed");
+        b.iter(|| {
+            std::hint::black_box(part_2(&input));
+        });
+    }
 }
