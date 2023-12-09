@@ -1,16 +1,20 @@
 #![warn(clippy::pedantic)]
 
+const EXAMPLE1: &str = include_str!("example1.txt");
+const EXAMPLE2: &str = include_str!("example2.txt");
+const INPUT: &str = include_str!("input.txt");
+
 pub fn run() {
     println!(".Day 01");
 
     println!("++Example");
-    let example1 = parse_input(include_str!("example1.txt"));
+    let example1 = parse_input(EXAMPLE1);
     println!("|+-Part 1: {} (expected 142)", part_1(&example1));
-    let example2 = parse_input(include_str!("example2.txt"));
+    let example2 = parse_input(EXAMPLE2);
     println!("|'-Part 2: {} (expected 281)", part_2(&example2));
 
     println!("++Input");
-    let input = parse_input(include_str!("input.txt"));
+    let input = parse_input(INPUT);
     println!("|+-Part 1: {} (expected 54927)", part_1(&input));
     println!("|'-Part 2: {} (expected 54581)", part_2(&input));
     println!("')");
@@ -233,22 +237,21 @@ mod tests {
     use super::*;
     use test::Bencher;
 
-    const TEXT: &str = include_str!("input.txt");
 
     #[bench]
     fn parsing(b: &mut Bencher) {
-        b.iter(|| parse_input(TEXT));
+        b.iter(|| parse_input(INPUT));
     }
 
     #[bench]
     fn run_part_1(b: &mut Bencher) {
-        let input = parse_input(TEXT);
+        let input = parse_input(INPUT);
         b.iter(|| part_1(&input));
     }
 
     #[bench]
     fn run_part_2(b: &mut Bencher) {
-        let input = parse_input(TEXT);
+        let input = parse_input(INPUT);
         b.iter(|| part_2(&input));
     }
 }
