@@ -1,6 +1,5 @@
 #![warn(clippy::pedantic)]
 
-use std::collections::HashMap;
 use std::str::FromStr;
 
 use num_traits::Num;
@@ -104,8 +103,8 @@ enum ParseError {
     MissingSeparatorLine,
     #[error("Node line does not match 'NAME = (NAME, NAME)'")]
     NodeSyntaxError,
-    #[error("Node not found")]
-    NodeNotFound,
+    // #[error("Node not found")]
+    // NodeNotFound,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -128,10 +127,19 @@ impl TryFrom<u8> for Dir {
 
 #[derive(Debug, Clone, Default)]
 struct Node {
-    name: String,
     left_ix: usize,
     right_ix: usize,
     is_end: bool,
+}
+
+impl Node {
+    pub fn new(left_ix: usize, right_ix: usize) -> Self {
+        Self {
+            left_ix,
+            right_ix,
+            is_end: false,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -147,6 +155,14 @@ impl FromStr for Input {
     type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        fn hash(s: &str) -> usize {
+            let b = s.as_bytes();
+            let c1 = b[0] as usize % 26;
+            let c2 = b[1] as usize % 26;
+            let c3 = b[2] as usize % 26;
+            c1 * 676 + c2 * 26 + c3
+        }
+
         let mut lines = s.lines();
         let instructions = lines
             .next()
@@ -159,39 +175,29 @@ impl FromStr for Input {
             _ => return Err(ParseError::MissingSeparatorLine),
         };
 
-        let mut lookup = HashMap::new();
-        let mut nodes = Vec::new();
+        let mut nodes = vec![Node::default(); 17576];
+        let mut start_ix = usize::MAX;
+        let mut end_ix = usize::MAX;
+        let mut start_ixs = Vec::new();
         for line in lines.clone() {
             let (name, line) = line.split_once(" = (").ok_or(ParseError::NodeSyntaxError)?;
             let (left, line) = line.split_once(", ").ok_or(ParseError::NodeSyntaxError)?;
             let right = line.strip_suffix(')').ok_or(ParseError::NodeSyntaxError)?;
-            let mut node = Node::default();
-            let ix = nodes.len();
-            node.name = name.to_string();
-            nodes.push(node);
-            lookup.insert(name, (ix, left, right));
-        }
-        let mut start_ix = usize::MAX;
-        let mut end_ix = usize::MAX;
-        let mut start_ixs = Vec::new();
-        for (ix, node) in nodes.iter_mut().enumerate() {
-            let &(_, left, right) = lookup
-                .get(node.name.as_str())
-                .ok_or(ParseError::NodeNotFound)?;
-            node.left_ix = lookup.get(left).ok_or(ParseError::NodeNotFound)?.0;
-            node.right_ix = lookup.get(right).ok_or(ParseError::NodeNotFound)?.0;
-            if node.name.ends_with('A') {
-                if node.name.eq("AAA") {
+
+            let mut node = Node::new(hash(left), hash(right));
+            let ix = hash(name);
+            if name.ends_with('A') {
+                if name == "AAA" {
                     start_ix = ix;
                 }
                 start_ixs.push(ix);
-            }
-            if node.name.ends_with('Z') {
-                if node.name.eq("ZZZ") {
+            } else if name.ends_with('Z') {
+                if name == "ZZZ" {
                     end_ix = ix;
                 }
                 node.is_end = true;
             }
+            nodes[ix] = node;
         }
         Ok(Self {
             instructions,
