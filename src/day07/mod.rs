@@ -5,16 +5,19 @@ use std::str::FromStr;
 
 use thiserror::Error;
 
+const EXAMPLE: &str = include_str!("example.txt");
+const INPUT: &str = include_str!("input.txt");
+
 pub fn run() {
     println!(".Day 07");
 
     println!("++Example");
-    let mut example = parse_input(include_str!("example.txt"));
+    let mut example = parse_input(EXAMPLE);
     println!("|+-Part 1: {} (expected 6440)", part_1(&mut example));
     println!("|'-Part 2: {} (expected 5905)", part_2(&mut example));
 
     println!("++Input");
-    let mut input = parse_input(include_str!("input.txt"));
+    let mut input = parse_input(INPUT);
     println!("|+-Part 1: {} (expected 253313241)", part_1(&mut input));
     println!("|'-Part 2: {} (expected 253362743)", part_2(&mut input));
     println!("')");
@@ -141,7 +144,9 @@ impl Input {
         }
         match (self.classify(), jokers) {
             (t, 0) => t,
-            (HandType::FiveOfAKind | HandType::FourOfAKind | HandType::FullHouse, _) => HandType::FiveOfAKind,
+            (HandType::FiveOfAKind | HandType::FourOfAKind | HandType::FullHouse, _) => {
+                HandType::FiveOfAKind
+            }
             (HandType::TwoPairs, 1) => HandType::FullHouse,
             (HandType::ThreeOfAKind | HandType::TwoPairs, _) => HandType::FourOfAKind,
             (HandType::OnePair, _) => HandType::ThreeOfAKind,
@@ -154,7 +159,7 @@ impl Input {
         self.cards
             .iter()
             .fold(u32::from(self.classify() as u8), |s, &c| {
-                s * 0x10 + u32::from(c as u8)
+                (s << 4) | u32::from(c as u8)
             })
     }
 
@@ -162,8 +167,8 @@ impl Input {
         self.cards
             .iter()
             .fold(u32::from(self.classify_joker() as u8), |s, &c| match c {
-                Card::Jack => s * 0x10,
-                c => s * 0x10 + u32::from(c as u8),
+                Card::Jack => s << 4,
+                c => (s << 4) | u32::from(c as u8),
             })
     }
 }
@@ -177,7 +182,7 @@ impl FromStr for Input {
             return Err(ParseInputError::TooShort);
         }
         let mut res = Self::default();
-        for (i, &b) in bytes.iter().enumerate().take(5) {
+        for (i, &b) in bytes[0..5].iter().enumerate() {
             res.cards[i] = b.try_into()?;
         }
         if bytes[5] != b' ' {
@@ -194,4 +199,29 @@ fn parse_input(text: &str) -> Vec<Input> {
         res.push(line.parse().expect("Valid input"));
     }
     res
+}
+
+#[cfg(test)]
+mod tests {
+    use std::hint::black_box;
+
+    use super::*;
+    use test::Bencher;
+
+    #[bench]
+    fn run_parse_input(b: &mut Bencher) {
+        b.iter(|| black_box(parse_input(INPUT)));
+    }
+
+    #[bench]
+    fn run_part_1(b: &mut Bencher) {
+        let mut input = parse_input(INPUT);
+        b.iter(|| black_box(part_1(&mut input)));
+    }
+
+    #[bench]
+    fn run_part_2(b: &mut Bencher) {
+        let mut input = parse_input(INPUT);
+        b.iter(|| black_box(part_2(&mut input)));
+    }
 }
