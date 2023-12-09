@@ -3,16 +3,19 @@
 use std::collections::HashMap;
 use std::ops::{Add, Sub};
 
+const EXAMPLE: &str = include_str!("example.txt");
+const INPUT: &str = include_str!("input.txt");
+
 pub fn run() {
     println!(".Day 03");
 
     println!("++Example");
-    let example = parse_input(include_str!("example.txt"));
+    let example = parse_input(EXAMPLE);
     println!("|+-Part 1: {} (expected 4361)", part_1(&example));
     println!("|'-Part 2: {} (expected 467835)", part_2(&example));
 
     println!("++Input");
-    let input = parse_input(include_str!("input.txt"));
+    let input = parse_input(INPUT);
     println!("|+-Part 1: {} (expected 532428)", part_1(&input));
     println!("|'-Part 2: {} (expected 84051670)", part_2(&input));
     println!("')");
@@ -119,7 +122,10 @@ struct Input {
 }
 impl Input {
     fn new() -> Self {
-        Self::default()
+        Self {
+            symbols: Vec::with_capacity(800),
+            labels: Vec::with_capacity(1500),
+        }
     }
 }
 
@@ -170,4 +176,31 @@ fn parse_input(text: &str) -> Input {
         }
     }
     res
+}
+
+
+#[cfg(test)]
+mod tests {
+    use std::hint::black_box;
+
+    use super::*;
+    use test::Bencher;
+
+
+    #[bench]
+    fn run_parse_input(b: &mut Bencher) {
+        b.iter(|| black_box(parse_input(INPUT)));
+    }
+
+    #[bench]
+    fn run_part_1(b: &mut Bencher) {
+        let input = parse_input(INPUT);
+        b.iter(|| black_box(part_1(&input)));
+    }
+
+    #[bench]
+    fn run_part_2(b: &mut Bencher) {
+        let input = parse_input(INPUT);
+        b.iter(|| black_box(part_2(&input)));
+    }
 }
