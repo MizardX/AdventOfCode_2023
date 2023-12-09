@@ -30,7 +30,11 @@ fn part_1(input: &Input) -> isize {
     let mut min = isize::MAX;
     for &(mut seed) in &input.seeds {
         for mapping in &input.mappings {
-            seed = mapping.iter().find_map(|r| r.apply(seed)).unwrap_or(seed);
+            seed += if let Ok(ix) = mapping.binary_search_by(|m| m.cmp_source(seed)) {
+                mapping[ix].delta
+            } else {
+                0
+            }
         }
         min = min.min(seed);
     }
@@ -39,45 +43,74 @@ fn part_1(input: &Input) -> isize {
 
 #[allow(unused)]
 fn part_2(input: &Input) -> isize {
-    let seed_ranges = input
+    let mut seed_ranges = input
         .seeds
         .array_chunks::<2>()
         .map(|a| Range(a[0], a[0] + a[1]))
         .collect::<Vec<_>>();
+    seed_ranges.sort_unstable();
     let mut location = 0;
     loop {
         let mut cur = location;
-        let mut min_delta = Option::<isize>::None;
-        for mapping in input.mappings.iter().rev() {
-            if let Some((next, delta)) = mapping.iter().find_map(|r| r.reverse_apply(cur)) {
-                cur = next;
-                min_delta = Some(if let Some(min_delta) = min_delta {
-                    min_delta.min(delta)
-                } else {
-                    delta
-                });
+        let mut min_delta = isize::MAX;
+        for mapping in input.mappings2.iter().rev() {
+            match mapping.binary_search_by(|m| m.cmp_dest(cur)) {
+                Ok(ix) => {
+                    let m = &mapping[ix];
+                    min_delta = min_delta.min(m.end + m.delta - cur);
+                    cur -= m.delta;
+                }
+                Err(ix) if ix < mapping.len() => {
+                    let m = &mapping[ix]; // next
+                    min_delta = min_delta.min(m.start + m.delta - cur);
+                }
+                _ => (),
             }
         }
-        if seed_ranges.iter().any(|r| r.contains(cur)) {
+        if seed_ranges.binary_search_by(|r| r.cmp_value(cur)).is_ok() {
             return location;
         }
-        location += min_delta.unwrap_or(1);
+        location += min_delta;
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Eq)]
 struct Mapping {
     start: isize,
     end: isize,
     delta: isize,
 }
 
+impl PartialEq for Mapping {
+    fn eq(&self, other: &Self) -> bool {
+        self.start == other.start
+    }
+}
+
+impl Ord for Mapping {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.start.cmp(&other.start)
+    }
+}
+
+impl PartialOrd for Mapping {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct Range(isize, isize);
 
 impl Range {
-    pub fn contains(&self, val: isize) -> bool {
-        self.0 <= val && val < self.1
+    fn cmp_value(&self, val: isize) -> Ordering {
+        match val.cmp(&self.0) {
+            Ordering::Less => Ordering::Greater,
+            _ => match val.cmp(&self.1) {
+                Ordering::Less => Ordering::Equal,
+                _ => Ordering::Less,
+            },
+        }
     }
 }
 
@@ -98,14 +131,24 @@ impl Mapping {
         Self { start, end, delta }
     }
 
-    fn apply(&self, val: isize) -> Option<isize> {
-        (self.start <= val && val < self.end).then_some(val + self.delta)
+    fn cmp_source(&self, val: isize) -> Ordering {
+        match val.cmp(&self.start) {
+            Ordering::Less => Ordering::Greater,
+            _ => match val.cmp(&self.end) {
+                Ordering::Less => Ordering::Equal,
+                _ => Ordering::Less,
+            },
+        }
     }
 
-    fn reverse_apply(&self, val: isize) -> Option<(isize, isize)> {
-        let candidate = val - self.delta;
-        (self.start <= candidate && candidate < self.end)
-            .then_some((candidate, self.end - candidate))
+    fn cmp_dest(&self, val: isize) -> Ordering {
+        match val.cmp(&(self.start + self.delta)) {
+            Ordering::Less => Ordering::Greater,
+            _ => match val.cmp(&(self.end + self.delta)) {
+                Ordering::Less => Ordering::Equal,
+                _ => Ordering::Less,
+            },
+        }
     }
 }
 
@@ -148,8 +191,8 @@ enum ParseError {
     MissingLen,
     #[error("One of the numbers could not be parsed as an integer: {0}")]
     NotInteger(#[from] ParseIntError),
-    #[error("The line contains more values than expected")]
-    ExtraneousValues,
+    // #[error("The line contains more values than expected")]
+    // ExtraneousValues,
 }
 
 impl FromStr for Mapping {
@@ -160,9 +203,9 @@ impl FromStr for Mapping {
         let destination_start: isize = it.next().ok_or(ParseError::MissingDestination)?.parse()?;
         let source_start: isize = it.next().ok_or(ParseError::MissingSource)?.parse()?;
         let len: isize = it.next().ok_or(ParseError::MissingLen)?.parse()?;
-        if it.next().is_some() {
-            return Err(ParseError::ExtraneousValues);
-        }
+        // if it.next().is_some() {
+        //     return Err(ParseError::ExtraneousValues);
+        // }
         Ok(Self::new(
             source_start,
             source_start + len,
@@ -175,6 +218,7 @@ impl FromStr for Mapping {
 struct Input {
     seeds: Vec<isize>,
     mappings: Vec<Vec<Mapping>>,
+    mappings2: Vec<Vec<Mapping>>,
 }
 
 #[allow(unused)]
@@ -189,23 +233,41 @@ fn parse_input(text: &str) -> Result<Input, ParseError> {
         .map(str::parse)
         .collect::<Result<Vec<_>, _>>()?;
 
-    let mut mappings = Vec::new();
-    let mut current = Vec::new();
+    let mut mappings = Vec::with_capacity(10);
+    let mut current: Vec<Mapping> = Vec::with_capacity(50);
+    let mut is_header = true;
 
     for line in lines {
         if line.is_empty() {
+            is_header = true;
             continue;
         }
-        if line.ends_with(':') {
-            current.sort_unstable();
-            mappings.push(std::mem::take(&mut current));
+
+        if is_header {
+            is_header = false;
+            if !current.is_empty() {
+                current.sort_unstable();
+                let mut tmp = Vec::with_capacity(50);
+                std::mem::swap(&mut current, &mut tmp);
+                mappings.push(tmp);
+            }
         } else {
-            current.push(Mapping::from_str(line)?);
+            current.push(line.parse()?);
         }
     }
+    current.sort_unstable();
     mappings.push(current);
 
-    Ok(Input { seeds, mappings })
+    let mut mappings2 = mappings.clone();
+    for m in &mut mappings2 {
+        m.sort_unstable_by_key(|r| r.start + r.delta);
+    }
+
+    Ok(Input {
+        seeds,
+        mappings,
+        mappings2,
+    })
 }
 
 #[cfg(test)]
