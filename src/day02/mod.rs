@@ -1,17 +1,20 @@
 #![warn(clippy::pedantic)]
 
-use std::ops::AddAssign;
+use std::str::FromStr;
+
+const EXAMPLE: &str = include_str!("example.txt");
+const INPUT: &str = include_str!("input.txt");
 
 pub fn run() {
     println!(".Day 02");
 
     println!("++Example");
-    let example = parse_input(include_str!("example.txt"));
+    let example = parse_input(EXAMPLE);
     println!("|+-Part 1: {} (expected 8)", part_1(&example));
     println!("|'-Part 2: {} (expected 2286)", part_2(&example));
 
     println!("++Input");
-    let input = parse_input(include_str!("input.txt"));
+    let input = parse_input(INPUT);
     println!("|+-Part 1: {} (expected 2176)", part_1(&input));
     println!("|'-Part 2: {} (expected 63700)", part_2(&input));
     println!("')");
@@ -81,32 +84,34 @@ impl Round {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-enum Color {
-    Red,
-    Green,
-    Blue,
-}
+impl FromStr for Round {
+    type Err = ();
 
-impl AddAssign<(usize, Color)> for Round {
-    fn add_assign(&mut self, rhs: (usize, Color)) {
-        match rhs.1 {
-            Color::Red => self.red += rhs.0,
-            Color::Green => self.green += rhs.0,
-            Color::Blue => self.blue += rhs.0,
+    fn from_str(piece: &str) -> Result<Self, Self::Err> {
+        let mut res = Round::new();
+        for cube in piece.split(", ") {
+            let (num_str, color_str) = cube.split_once(' ').expect("Space separator");
+            let num = num_str.parse::<usize>().expect("Integer");
+            match color_str.as_bytes()[0] {
+                b'r' => res.red += num,
+                b'g' => res.green += num,
+                b'b' => res.blue += num,
+                _ => (),
+            };
         }
+        Ok(res)
     }
 }
 
 fn parse_input(text: &str) -> Vec<Input> {
     let mut res: Vec<Input> = Vec::new();
     for line in text.lines() {
-        let line = line.strip_prefix("Game ").expect("game prefix");
+        let line = &line[5..]; //.strip_prefix("Game ").expect("game prefix");
         let (id_str, line) = line.split_once(": ").expect("colon separator");
         let id = id_str.parse::<usize>().expect("numeric game id");
-        let mut rounds = Vec::new();
+        let mut rounds = Vec::with_capacity(10);
         for round_str in line.split("; ") {
-            let round = parse_round(round_str).expect("round");
+            let round = round_str.parse().expect("round");
             rounds.push(round);
         }
         res.push(Input { id, rounds });
@@ -114,22 +119,28 @@ fn parse_input(text: &str) -> Vec<Input> {
     res
 }
 
-fn parse_round(piece: &str) -> Option<Round> {
-    let mut res = Round::new();
-    for cube in piece.split(", ") {
-        res += parse_cube(cube)?;
-    }
-    Some(res)
-}
+#[cfg(test)]
+mod tests {
+    use std::hint::black_box;
 
-fn parse_cube(component: &str) -> Option<(usize, Color)> {
-    let (num_str, color_str) = component.split_once(' ')?;
-    let num = num_str.parse::<usize>().ok()?;
-    let color = match color_str.as_bytes()[0] {
-        b'r' => Color::Red,
-        b'g' => Color::Green,
-        b'b' => Color::Blue,
-        _ => return None,
-    };
-    Some((num, color))
+    use super::*;
+    use test::Bencher;
+
+
+    #[bench]
+    fn run_parse_input(b: &mut Bencher) {
+        b.iter(|| black_box(parse_input(INPUT)));
+    }
+
+    #[bench]
+    fn run_part_1(b: &mut Bencher) {
+        let input = parse_input(INPUT);
+        b.iter(|| black_box(part_1(&input)));
+    }
+
+    #[bench]
+    fn run_part_2(b: &mut Bencher) {
+        let input = parse_input(INPUT);
+        b.iter(|| black_box(part_2(&input)));
+    }
 }
