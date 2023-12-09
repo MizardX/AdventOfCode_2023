@@ -6,16 +6,19 @@ use std::str::FromStr;
 use num_traits::Num;
 use thiserror::Error;
 
+const EXAMPLE: &str = include_str!("example.txt");
+const INPUT: &str = include_str!("input.txt");
+
 pub fn run() {
     println!(".Day 09");
 
     println!("++Example");
-    let example = parse_input(include_str!("example.txt")).expect("Parse example");
+    let example = parse_input(EXAMPLE).expect("Parse example");
     println!("|+-Part 1: {} (expected 114)", part_1(&example));
     println!("|'-Part 2: {} (expected 2)", part_2(&example));
 
     println!("++Input");
-    let input = parse_input(include_str!("input.txt")).expect("Parse real input");
+    let input = parse_input(INPUT).expect("Parse real input");
     println!("|+-Part 1: {} (expected 1939607039)", part_1(&input));
     println!("|'-Part 2: {} (expected 1041)", part_2(&input));
     println!("')");
@@ -88,4 +91,30 @@ fn parse_input(text: &str) -> Result<Vec<Input>, ParseInputError> {
         res.push(line.parse()?);
     }
     Ok(res)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::hint::black_box;
+
+    use super::*;
+    use test::Bencher;
+
+
+    #[bench]
+    fn run_parse_input(b: &mut Bencher) {
+        b.iter(|| black_box(parse_input(INPUT)));
+    }
+
+    #[bench]
+    fn run_part_1(b: &mut Bencher) {
+        let input = parse_input(INPUT).expect("Parse input");
+        b.iter(|| black_box(part_1(&input)));
+    }
+
+    #[bench]
+    fn run_part_2(b: &mut Bencher) {
+        let input = parse_input(INPUT).expect("Parse input");
+        b.iter(|| black_box(part_2(&input)));
+    }
 }
