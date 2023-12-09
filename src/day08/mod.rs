@@ -7,29 +7,28 @@ use num_traits::Num;
 
 use thiserror::Error;
 
+const EXAMPLE1: &str = include_str!("example1.txt");
+const EXAMPLE2: &str = include_str!("example2.txt");
+const EXAMPLE3: &str = include_str!("example3.txt");
+const INPUT: &str = include_str!("input.txt");
+
 pub fn run() {
     println!(".Day 07");
 
     println!("++Example1");
-    let example = include_str!("example1.txt")
-        .parse()
-        .expect("Parse example 1");
-    println!("|+-Part 1: {} (expected 2)", part_1(&example));
+    let example1 = EXAMPLE1.parse().expect("Parse example 1");
+    println!("|+-Part 1: {} (expected 2)", part_1(&example1));
 
     println!("++Example2");
-    let example = include_str!("example2.txt")
-        .parse()
-        .expect("Parse example 1");
-    println!("|+-Part 1: {} (expected 6)", part_1(&example));
+    let example2 = EXAMPLE2.parse().expect("Parse example 1");
+    println!("|+-Part 1: {} (expected 6)", part_1(&example2));
 
     println!("++Example3");
-    let example = include_str!("example3.txt")
-        .parse()
-        .expect("Parse example 3");
-    println!("|+-Part 2: {} (expected 6)", part_2(&example));
+    let example3 = EXAMPLE3.parse().expect("Parse example 3");
+    println!("|+-Part 2: {} (expected 6)", part_2(&example3));
 
     println!("++Input");
-    let input = include_str!("input.txt").parse().expect("Real input");
+    let input = INPUT.parse().expect("Real input");
     println!("|+-Part 1: {} (expected 15517)", part_1(&input));
     println!("|'-Part 2: {} (expected 14935034899483)", part_2(&input));
     println!("')");
@@ -201,5 +200,30 @@ impl FromStr for Input {
             end_ix,
             start_ixs,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::hint::black_box;
+
+    use super::*;
+    use test::Bencher;
+
+    #[bench]
+    fn run_parse_input(b: &mut Bencher) {
+        b.iter(|| black_box(INPUT.parse::<Input>()));
+    }
+
+    #[bench]
+    fn run_part_1(b: &mut Bencher) {
+        let input = INPUT.parse::<Input>().expect("Parase input");
+        b.iter(|| black_box(part_1(&input)));
+    }
+
+    #[bench]
+    fn run_part_2(b: &mut Bencher) {
+        let input = INPUT.parse::<Input>().expect("Parse input");
+        b.iter(|| black_box(part_2(&input)));
     }
 }
