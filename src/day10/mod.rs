@@ -2,6 +2,7 @@
 
 use std::fmt::Debug;
 use std::num::TryFromIntError;
+use std::ops::Add;
 use std::str::FromStr;
 
 use thiserror::Error;
@@ -38,156 +39,143 @@ pub fn run() {
     println!("')");
 }
 
-#[allow(unused)]
 fn part_1(input: &Input) -> usize {
-    let size = input.pipes.len();
-    let (a, b) = {
+    // Pick one direction for the start tile
+    let enter = {
         let mut it = input.neighbors(input.start).into_iter().flatten();
-        (it.next().unwrap().0, it.next().unwrap().0.reverse())
+        // pick first as exit direction; ignored
+        let _ = it.next();
+        // the other is enter direction
+        it.next().unwrap().0.reverse()
     };
+
     let mut dist = 0;
-    let mut cur = (input.start, b);
+    let mut pos = input.start;
+    let mut dir = enter;
     loop {
-        let (ndir, next) = input
-            .neighbors(cur.0)
+        let (next_dir, next) = input
+            .neighbors(pos)
             .into_iter()
             .flatten()
-            .find(|(d, p)| d.reverse() != cur.1)
+            .find(|(next_dir, _)| next_dir.reverse() != dir)
             .unwrap();
         dist += 1;
-        cur = (next, ndir);
-        if cur.0 == input.start {
+        pos = next;
+        dir = next_dir;
+        if pos == input.start {
             break;
         }
     }
     dist / 2
 }
 
-#[allow(unused)]
-//#[allow(clippy::too_many_lines)]
 fn part_2(input: &Input) -> usize {
-    let size = input.pipes.len();
-    let (a, b) = {
+    // Pick one direction for the start tile
+    let (exit, enter) = {
         let mut it = input.neighbors(input.start).into_iter().flatten();
         (it.next().unwrap().0, it.next().unwrap().0.reverse())
     };
-    let mut path = Grid::<Path>::new(input.pipes.width, input.pipes.height);
-    path.set_if(input.start, Path::from_dir(b, a), Path::is_not_pipe);
-    let mut cur = (input.start, b);
+
+    let mut pipes = Grid::<Path>::new(input.pipes.width, input.pipes.height);
+    pipes.set_if(input.start, Path::from_dir(enter, exit), Path::is_not_pipe);
+
+    let mut pos = input.start;
+    let mut dir = enter;
     loop {
-        let (ndir, next) = input
-            .neighbors(cur.0)
+        // The direction we didn't come from
+        let (next_dir, next) = input
+            .neighbors(pos)
             .into_iter()
             .flatten()
-            .find(|(d, p)| d.reverse() != cur.1)
+            .find(|(next_dir, _)| next_dir.reverse() != dir)
             .unwrap();
-        path.set_if(cur.0, Path::from_dir(cur.1, ndir), Path::is_not_pipe);
-        match (cur.1, ndir) {
-            // Straight
-            (Dir::N, Dir::N) => {
-                path.set_if(cur.0.west(), Path::O, Path::is_not_pipe);
-                path.set_if(cur.0.east(), Path::I, Path::is_not_pipe);
-            }
-            (Dir::E, Dir::E) => {
-                path.set_if(cur.0.north(), Path::O, Path::is_not_pipe);
-                path.set_if(cur.0.south(), Path::I, Path::is_not_pipe);
-            }
-            (Dir::S, Dir::S) => {
-                path.set_if(cur.0.east(), Path::O, Path::is_not_pipe);
-                path.set_if(cur.0.west(), Path::I, Path::is_not_pipe);
-            }
-            (Dir::W, Dir::W) => {
-                path.set_if(cur.0.south(), Path::O, Path::is_not_pipe);
-                path.set_if(cur.0.north(), Path::I, Path::is_not_pipe);
-            }
+        let pipe = Path::from_dir(dir, next_dir);
+        pipes.set_if(pos, pipe, Path::is_not_pipe);
 
-            // turn right
-            (Dir::N, Dir::E) => {
-                path.set_if(cur.0.west(), Path::O, Path::is_not_pipe);
-                path.set_if(cur.0.north(), Path::O, Path::is_not_pipe);
-            }
-            (Dir::E, Dir::S) => {
-                path.set_if(cur.0.north(), Path::O, Path::is_not_pipe);
-                path.set_if(cur.0.east(), Path::O, Path::is_not_pipe);
-            }
-            (Dir::S, Dir::W) => {
-                path.set_if(cur.0.east(), Path::O, Path::is_not_pipe);
-                path.set_if(cur.0.south(), Path::O, Path::is_not_pipe);
-            }
-            (Dir::W, Dir::N) => {
-                path.set_if(cur.0.south(), Path::O, Path::is_not_pipe);
-                path.set_if(cur.0.west(), Path::O, Path::is_not_pipe);
-            }
-
-            // turn left
-            (Dir::N, Dir::W) => {
-                path.set_if(cur.0.north(), Path::I, Path::is_not_pipe);
-                path.set_if(cur.0.east(), Path::I, Path::is_not_pipe);
-            }
-            (Dir::E, Dir::N) => {
-                path.set_if(cur.0.east(), Path::I, Path::is_not_pipe);
-                path.set_if(cur.0.south(), Path::I, Path::is_not_pipe);
-            }
-            (Dir::S, Dir::E) => {
-                path.set_if(cur.0.south(), Path::I, Path::is_not_pipe);
-                path.set_if(cur.0.west(), Path::I, Path::is_not_pipe);
-            }
-            (Dir::W, Dir::S) => {
-                path.set_if(cur.0.west(), Path::I, Path::is_not_pipe);
-                path.set_if(cur.0.north(), Path::I, Path::is_not_pipe);
-            }
-            _ => (),
+        if let Path::E | Path::ES | Path::NE = pipe {
+            pipes.set_if(pos + Dir::N, Path::Outside, Path::is_not_pipe);
         }
-        cur = (next, ndir);
-        if cur.0 == input.start {
+        if let Path::S | Path::SW | Path::ES = pipe {
+            pipes.set_if(pos + Dir::E, Path::Outside, Path::is_not_pipe);
+        }
+        if let Path::W | Path::WN | Path::SW = pipe {
+            pipes.set_if(pos + Dir::S, Path::Outside, Path::is_not_pipe);
+        }
+        if let Path::N | Path::NE | Path::WN = pipe {
+            pipes.set_if(pos + Dir::W, Path::Outside, Path::is_not_pipe);
+        }
+
+        if let Path::W | Path::WS | Path::NW = pipe {
+            pipes.set_if(pos + Dir::N, Path::Inside, Path::is_not_pipe);
+        }
+        if let Path::N | Path::NW | Path::EN = pipe {
+            pipes.set_if(pos + Dir::E, Path::Inside, Path::is_not_pipe);
+        }
+        if let Path::E | Path::EN | Path::SE = pipe {
+            pipes.set_if(pos + Dir::S, Path::Inside, Path::is_not_pipe);
+        }
+        if let Path::S | Path::SE | Path::WS = pipe {
+            pipes.set_if(pos + Dir::W, Path::Inside, Path::is_not_pipe);
+        }
+
+        pos = next;
+        dir = next_dir;
+        if pos == input.start {
             break;
         }
     }
-    for row in 0..path.height {
-        for col in 0..path.width {
+    for row in 0..pipes.height {
+        for col in 0..pipes.width {
             let pos = Pos::from_usize(row, col).unwrap();
-            let Some(val) = path.get(pos) else { continue };
+            let Some(val) = pipes.get(pos) else { continue };
             match val {
-                Path::I => {
-                    path.flood_fill(pos, Path::I, |x| matches!(x, Path::X));
+                Path::Inside => {
+                    pipes.flood_fill(pos, Path::Inside, |x| matches!(x, Path::X));
                 }
-                Path::O => {
-                    path.flood_fill(pos, Path::O, |x| matches!(x, Path::X));
+                Path::Outside => {
+                    pipes.flood_fill(pos, Path::Outside, |x| matches!(x, Path::X));
                 }
                 _ => (),
             }
         }
     }
     // Inside/outside could be the other way around, since we are not checking path direction. Just pick the smaller one.
-    let outside = path.count_if(|x| matches!(x, Path::O));
-    let inside = path.count_if(|x| matches!(x, Path::I));
+    let outside = pipes.count_if(|x| matches!(x, Path::Outside));
+    let inside = pipes.count_if(|x| matches!(x, Path::Inside));
     outside.min(inside)
 }
 
+/// Underectional pipes
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Pipe {
+    /// Empty
     X,
+    /// Vertical North-South
     NS,
+    /// Horizontal East-West
     EW,
+    /// North-East turn
     NE,
+    /// North-West turn
     NW,
+    /// South-West turn
     SW,
+    /// South-Eeast turn
     SE,
+    /// Starting position, with unknown direction
     S,
 }
 
 impl Pipe {
-    pub const fn connected_north(self) -> bool {
-        matches!(self, Pipe::NS | Pipe::NE | Pipe::NW | Pipe::S)
-    }
-    pub const fn connected_east(self) -> bool {
-        matches!(self, Pipe::EW | Pipe::NE | Pipe::SE | Pipe::S)
-    }
-    pub const fn connected_south(self) -> bool {
-        matches!(self, Pipe::NS | Pipe::SE | Pipe::SW | Pipe::S)
-    }
-    pub const fn connected_west(self) -> bool {
-        matches!(self, Pipe::EW | Pipe::NW | Pipe::SW | Pipe::S)
+    /// If this pipe has a connection in given direction
+    pub const fn connected(self, dir: Dir) -> bool {
+        matches!(
+            (dir, self),
+            (Dir::N, Pipe::NS | Pipe::NE | Pipe::NW | Pipe::S)
+                | (Dir::E, Pipe::EW | Pipe::NE | Pipe::SE | Pipe::S)
+                | (Dir::S, Pipe::NS | Pipe::SE | Pipe::SW | Pipe::S)
+                | (Dir::W, Pipe::EW | Pipe::NW | Pipe::SW | Pipe::S)
+        )
     }
 }
 
@@ -209,6 +197,7 @@ impl TryFrom<u8> for Pipe {
     }
 }
 
+/// Grid position
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct Pos {
     row: isize,
@@ -220,39 +209,12 @@ impl Pos {
         Self { row, col }
     }
 
+    /// Tries to convrt usize into signed
     pub fn from_usize(row: usize, col: usize) -> Option<Self> {
         Some(Self::new(
             isize::try_from(row).ok()?,
             isize::try_from(col).ok()?,
         ))
-    }
-
-    pub const fn north(self) -> Self {
-        Self {
-            row: self.row - 1,
-            ..self
-        }
-    }
-
-    pub const fn south(self) -> Self {
-        Self {
-            row: self.row + 1,
-            ..self
-        }
-    }
-
-    pub const fn east(self) -> Self {
-        Self {
-            col: self.col + 1,
-            ..self
-        }
-    }
-
-    pub const fn west(self) -> Self {
-        Self {
-            col: self.col - 1,
-            ..self
-        }
     }
 }
 
@@ -262,11 +224,29 @@ impl Debug for Pos {
     }
 }
 
+impl Add<Dir> for Pos {
+    type Output = Pos;
+
+    fn add(mut self, rhs: Dir) -> Self::Output {
+        match rhs {
+            Dir::N => self.row -= 1,
+            Dir::E => self.col += 1,
+            Dir::S => self.row += 1,
+            Dir::W => self.col -= 1,
+        }
+        self
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Dir {
+    /// North
     N,
+    /// East
     E,
+    /// South
     S,
+    /// West
     W,
 }
 
@@ -281,24 +261,40 @@ impl Dir {
     }
 }
 
+/// Directional pipes
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 enum Path {
+    /// Unpsecified
     #[default]
     X,
+    /// North turning west
     NW,
+    /// North ahead
     N,
+    /// North turning east
     NE,
+    /// East turning north
     EN,
+    /// East ahead
     E,
+    /// East turning south
     ES,
+    /// South turning east
     SE,
+    /// South ahead
     S,
+    /// South turning west
     SW,
+    /// West turning south
     WS,
+    /// West ahead
     W,
+    /// West turning north
     WN,
-    O,
-    I,
+    /// Outside
+    Outside,
+    /// Inside
+    Inside,
 }
 
 impl Path {
@@ -338,9 +334,7 @@ impl Path {
             (Dir::W, Dir::N) => Self::WN,
             (Dir::W, Dir::S) => Self::WS,
             (Dir::W, Dir::W) => Self::W,
-            _ => {
-                unreachable!()
-            }
+            _ => unreachable!(),
         }
     }
 }
@@ -371,10 +365,6 @@ impl<T> Grid<T>
 where
     T: Copy,
 {
-    pub fn len(&self) -> usize {
-        self.width * self.height
-    }
-
     pub fn from_vec(width: usize, height: usize, values: Vec<T>) -> Self {
         assert_eq!(values.len(), width * height);
         Self {
@@ -403,16 +393,23 @@ where
     }
 
     #[inline]
-    #[allow(clippy::cast_possible_wrap)]
     fn is_inside(&self, pos: Pos) -> bool {
-        (0..self.height as isize).contains(&pos.row) && (0..self.width as isize).contains(&pos.col)
+        let Ok(height) = isize::try_from(self.height) else {
+            return false;
+        };
+        let Ok(width) = isize::try_from(self.width) else {
+            return false;
+        };
+        (0..height).contains(&pos.row) && (0..width).contains(&pos.col)
     }
 
     #[inline]
-    #[allow(clippy::cast_possible_wrap)]
     fn to_index(&self, pos: Pos) -> Option<usize> {
+        let Ok(width) = isize::try_from(self.width) else {
+            return None;
+        };
         if self.is_inside(pos) {
-            usize::try_from(pos.row * self.width as isize + pos.col).ok()
+            usize::try_from(pos.row * width + pos.col).ok()
         } else {
             None
         }
@@ -431,7 +428,7 @@ where
                     continue;
                 }
                 self.set(pos, replace_with);
-                next.extend([pos.north(), pos.east(), pos.south(), pos.east()]);
+                next.extend([pos + Dir::N, pos + Dir::E, pos + Dir::S, pos + Dir::E]);
             }
             first = false;
             std::mem::swap(&mut current, &mut next);
@@ -469,56 +466,19 @@ impl Input {
         self.pipes.get(pos)
     }
 
-    fn walk_north(&self, pos: Pos) -> Option<Pos> {
+    fn walk(&self, pos: Pos, dir: Dir) -> Option<Pos> {
         let pipe_cur = self.get(pos)?;
-        let target = pos.north();
-        let pipe_tar = self.get(target)?;
-        if pipe_cur.connected_north() && pipe_tar.connected_south() {
-            Some(target)
-        } else {
-            None
-        }
-    }
-
-    fn walk_east(&self, pos: Pos) -> Option<Pos> {
-        let pipe_cur = self.get(pos)?;
-        let target = pos.east();
-        let pipe_tar = self.get(target)?;
-        if pipe_cur.connected_east() && pipe_tar.connected_west() {
-            Some(target)
-        } else {
-            None
-        }
-    }
-
-    fn walk_south(&self, pos: Pos) -> Option<Pos> {
-        let pipe_cur = self.get(pos)?;
-        let target = pos.south();
-        let pipe_tar = self.get(target)?;
-        if pipe_cur.connected_south() && pipe_tar.connected_north() {
-            Some(target)
-        } else {
-            None
-        }
-    }
-
-    fn walk_west(&self, pos: Pos) -> Option<Pos> {
-        let pipe_cur = self.get(pos)?;
-        let target = pos.west();
-        let pipe_tar = self.get(target)?;
-        if pipe_cur.connected_west() && pipe_tar.connected_east() {
-            Some(target)
-        } else {
-            None
-        }
+        let target = pos + dir;
+        let pipe_target = self.get(target)?;
+        (pipe_cur.connected(dir) && pipe_target.connected(dir.reverse())).then_some(target)
     }
 
     fn neighbors(&self, pos: Pos) -> [Option<(Dir, Pos)>; 4] {
         [
-            self.walk_north(pos).map(|p| (Dir::N, p)),
-            self.walk_east(pos).map(|p| (Dir::E, p)),
-            self.walk_south(pos).map(|p| (Dir::S, p)),
-            self.walk_west(pos).map(|p| (Dir::W, p)),
+            try { (Dir::N, self.walk(pos, Dir::N)?) },
+            try { (Dir::E, self.walk(pos, Dir::E)?) },
+            try { (Dir::S, self.walk(pos, Dir::S)?) },
+            try { (Dir::W, self.walk(pos, Dir::W)?) },
         ]
     }
 }
