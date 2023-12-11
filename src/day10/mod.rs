@@ -25,29 +25,30 @@ pub fn run() {
     println!("|+-Part 1: {} (expected 8)", part_1(&example2));
 
     println!("++Example3");
-    let example3 = EXAMPLE3.parse().expect("Parse example 3");
-    println!("|+-Part 2: {} (expected 4)", part_2(&example3));
+    let mut example3 = EXAMPLE3.parse().expect("Parse example 3");
+    println!("|+-Part 2: {} (expected 4)", part_2(&mut example3));
 
     println!("++Example4");
-    let example4 = EXAMPLE4.parse().expect("Parse example 4");
-    println!("|+-Part 2: {} (expected 10)", part_2(&example4));
+    let mut example4 = EXAMPLE4.parse().expect("Parse example 4");
+    println!("|+-Part 2: {} (expected 10)", part_2(&mut example4));
 
     println!("++Input");
-    let input = INPUT.parse().expect("Parse input");
+    let mut input = INPUT.parse().expect("Parse input");
     println!("|+-Part 1: {} (expected 6717)", part_1(&input));
-    println!("|'-Part 2: {} (expected 381)", part_2(&input));
+    println!("|'-Part 2: {} (expected 381)", part_2(&mut input));
     println!("')");
 }
 
 fn part_1(input: &Input) -> usize {
     // Pick one direction for the start tile
-    let enter = {
-        let mut it = input.neighbors(input.start).into_iter().flatten();
-        // pick first as exit direction; ignored
-        let _ = it.next();
-        // the other is enter direction
-        it.next().unwrap().0.reverse()
-    };
+    let enter = input
+        .neighbors(input.start)
+        .into_iter()
+        .flatten()
+        .next()
+        .unwrap()
+        .0
+        .reverse();
 
     let mut dist = 0;
     let mut pos = input.start;
@@ -69,83 +70,71 @@ fn part_1(input: &Input) -> usize {
     dist / 2
 }
 
-fn part_2(input: &Input) -> usize {
-    // Pick one direction for the start tile
-    let (exit, enter) = {
-        let mut it = input.neighbors(input.start).into_iter().flatten();
-        (it.next().unwrap().0, it.next().unwrap().0.reverse())
-    };
-
-    let mut pipes = Grid::<Path>::new(input.pipes.width, input.pipes.height);
-    pipes.set_if(input.start, Path::from_dir(enter, exit), Path::is_not_pipe);
+fn part_2(input: &mut Input) -> usize {
+    let enter = input
+        .neighbors(input.start)
+        .into_iter()
+        .flatten()
+        .next()
+        .unwrap()
+        .0
+        .reverse();
 
     let mut pos = input.start;
     let mut dir = enter;
     loop {
-        // The direction we didn't come from
+        input.grid.map(pos, Pipe::to_pipe);
         let (next_dir, next) = input
             .neighbors(pos)
             .into_iter()
             .flatten()
             .find(|(next_dir, _)| next_dir.reverse() != dir)
             .unwrap();
-        let pipe = Path::from_dir(dir, next_dir);
-        pipes.set_if(pos, pipe, Path::is_not_pipe);
-
-        if let Path::E | Path::ES | Path::NE = pipe {
-            pipes.set_if(pos + Dir::N, Path::Outside, Path::is_not_pipe);
-        }
-        if let Path::S | Path::SW | Path::ES = pipe {
-            pipes.set_if(pos + Dir::E, Path::Outside, Path::is_not_pipe);
-        }
-        if let Path::W | Path::WN | Path::SW = pipe {
-            pipes.set_if(pos + Dir::S, Path::Outside, Path::is_not_pipe);
-        }
-        if let Path::N | Path::NE | Path::WN = pipe {
-            pipes.set_if(pos + Dir::W, Path::Outside, Path::is_not_pipe);
-        }
-
-        if let Path::W | Path::WS | Path::NW = pipe {
-            pipes.set_if(pos + Dir::N, Path::Inside, Path::is_not_pipe);
-        }
-        if let Path::N | Path::NW | Path::EN = pipe {
-            pipes.set_if(pos + Dir::E, Path::Inside, Path::is_not_pipe);
-        }
-        if let Path::E | Path::EN | Path::SE = pipe {
-            pipes.set_if(pos + Dir::S, Path::Inside, Path::is_not_pipe);
-        }
-        if let Path::S | Path::SE | Path::WS = pipe {
-            pipes.set_if(pos + Dir::W, Path::Inside, Path::is_not_pipe);
-        }
-
         pos = next;
         dir = next_dir;
         if pos == input.start {
             break;
         }
     }
-    for row in 0..pipes.height {
-        for col in 0..pipes.width {
-            let pos = Pos::from_usize(row, col).unwrap();
-            let Some(val) = pipes.get(pos) else { continue };
-            match val {
-                Path::Inside => {
-                    pipes.flood_fill(pos, Path::Inside, |x| matches!(x, Path::X));
+    let mut count_inside = 0;
+    let mut inside = false;
+    let mut from_above = false;
+    for r in 0..isize::try_from(input.grid.height).unwrap() {
+        for &cell in input.grid.get_row(r).unwrap() {
+            match cell {
+                Pipe::PNS => {
+                    inside = !inside;
                 }
-                Path::Outside => {
-                    pipes.flood_fill(pos, Path::Outside, |x| matches!(x, Path::X));
+                Pipe::PEW => (),
+                Pipe::PNE => {
+                    from_above = true;
+                }
+                Pipe::PSE => {
+                    from_above = false;
+                }
+                Pipe::PNW => {
+                    if !from_above {
+                        inside = !inside;
+                    }
+                }
+                Pipe::PSW => {
+                    if from_above {
+                        inside = !inside;
+                    }
+                }
+                _ if inside => {
+                    count_inside += 1;
                 }
                 _ => (),
             }
         }
     }
-    // Inside/outside could be the other way around, since we are not checking path direction. Just pick the smaller one.
-    let outside = pipes.count_if(|x| matches!(x, Path::Outside));
-    let inside = pipes.count_if(|x| matches!(x, Path::Inside));
-    outside.min(inside)
+
+    count_inside
 }
 
 /// Underectional pipes
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Pipe {
     /// Empty
@@ -164,18 +153,45 @@ enum Pipe {
     SE,
     /// Starting position, with unknown direction
     S,
+    /// Path Vertical North-South
+    PNS,
+    /// Path Horizontal East-West
+    PEW,
+    /// Path North-East turn
+    PNE,
+    /// Path North-West turn
+    PNW,
+    /// Path South-West turn
+    PSW,
+    /// Path South-Eeast turn
+    PSE,
 }
 
 impl Pipe {
     /// If this pipe has a connection in given direction
     pub const fn connected(self, dir: Dir) -> bool {
         matches!(
-            (dir, self),
-            (Dir::N, Pipe::NS | Pipe::NE | Pipe::NW | Pipe::S)
-                | (Dir::E, Pipe::EW | Pipe::NE | Pipe::SE | Pipe::S)
-                | (Dir::S, Pipe::NS | Pipe::SE | Pipe::SW | Pipe::S)
-                | (Dir::W, Pipe::EW | Pipe::NW | Pipe::SW | Pipe::S)
+            (self, dir),
+            (Pipe::S, Dir::E | Dir::N | Dir::S | Dir::W)
+                | (Pipe::NE | Pipe::PNE, Dir::E | Dir::N)
+                | (Pipe::PSE | Pipe::SE, Dir::E | Dir::S)
+                | (Pipe::EW | Pipe::PEW, Dir::E | Dir::W)
+                | (Pipe::NS | Pipe::PNS, Dir::N | Dir::S)
+                | (Pipe::NW | Pipe::PNW, Dir::N | Dir::W)
+                | (Pipe::PSW | Pipe::SW, Dir::S | Dir::W)
         )
+    }
+
+    pub const fn to_pipe(self) -> Self {
+        match self {
+            Pipe::NS => Pipe::PNS,
+            Pipe::EW => Pipe::PEW,
+            Pipe::NE => Pipe::PNE,
+            Pipe::NW => Pipe::PNW,
+            Pipe::SW => Pipe::PSW,
+            Pipe::SE => Pipe::PSE,
+            _ => self,
+        }
     }
 }
 
@@ -207,14 +223,6 @@ struct Pos {
 impl Pos {
     pub const fn new(row: isize, col: isize) -> Self {
         Self { row, col }
-    }
-
-    /// Tries to convrt usize into signed
-    pub fn from_usize(row: usize, col: usize) -> Option<Self> {
-        Some(Self::new(
-            isize::try_from(row).ok()?,
-            isize::try_from(col).ok()?,
-        ))
     }
 }
 
@@ -261,104 +269,11 @@ impl Dir {
     }
 }
 
-/// Directional pipes
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-enum Path {
-    /// Unpsecified
-    #[default]
-    X,
-    /// North turning west
-    NW,
-    /// North ahead
-    N,
-    /// North turning east
-    NE,
-    /// East turning north
-    EN,
-    /// East ahead
-    E,
-    /// East turning south
-    ES,
-    /// South turning east
-    SE,
-    /// South ahead
-    S,
-    /// South turning west
-    SW,
-    /// West turning south
-    WS,
-    /// West ahead
-    W,
-    /// West turning north
-    WN,
-    /// Outside
-    Outside,
-    /// Inside
-    Inside,
-}
-
-impl Path {
-    pub fn is_pipe(self) -> bool {
-        matches!(
-            self,
-            Self::NW
-                | Self::N
-                | Self::NE
-                | Self::EN
-                | Self::E
-                | Self::ES
-                | Self::SE
-                | Self::S
-                | Self::SW
-                | Self::WS
-                | Self::W
-                | Self::WN
-        )
-    }
-
-    pub fn is_not_pipe(self) -> bool {
-        !self.is_pipe()
-    }
-
-    pub fn from_dir(enter: Dir, exit: Dir) -> Self {
-        match (enter, exit) {
-            (Dir::N, Dir::N) => Self::N,
-            (Dir::N, Dir::E) => Self::NE,
-            (Dir::N, Dir::W) => Self::NW,
-            (Dir::E, Dir::N) => Self::EN,
-            (Dir::E, Dir::E) => Self::E,
-            (Dir::E, Dir::S) => Self::ES,
-            (Dir::S, Dir::E) => Self::SE,
-            (Dir::S, Dir::S) => Self::S,
-            (Dir::S, Dir::W) => Self::SW,
-            (Dir::W, Dir::N) => Self::WN,
-            (Dir::W, Dir::S) => Self::WS,
-            (Dir::W, Dir::W) => Self::W,
-            _ => unreachable!(),
-        }
-    }
-}
-
 #[derive(Clone)]
 struct Grid<T> {
     width: usize,
     height: usize,
     values: Vec<T>,
-}
-
-impl<T> Grid<T>
-where
-    T: Copy + Default,
-{
-    pub fn new(width: usize, height: usize) -> Self {
-        assert!(width > 0);
-        assert!(height > 0);
-        Self {
-            width,
-            height,
-            values: vec![T::default(); width * height],
-        }
-    }
 }
 
 impl<T> Grid<T>
@@ -384,11 +299,19 @@ where
         }
     }
 
-    pub fn set_if(&mut self, pos: Pos, value: T, check: impl FnOnce(T) -> bool) {
+    pub fn map(&mut self, pos: Pos, f: impl FnOnce(T) -> T) {
         if let Some(ix) = self.to_index(pos) {
-            if check(self.values[ix]) {
-                self.values[ix] = value;
-            }
+            let x = &mut self.values[ix];
+            *x = f(*x);
+        }
+    }
+
+    pub fn get_row(&self, row: isize) -> Option<&[T]> {
+        let row_usize = usize::try_from(row).ok()?;
+        if (0..self.height).contains(&row_usize) {
+            Some(&self.values[row_usize * self.width..(row_usize + 1) * self.width])
+        } else {
+            None
         }
     }
 
@@ -414,31 +337,6 @@ where
             None
         }
     }
-
-    fn flood_fill(&mut self, start: Pos, replace_with: T, replace_if: impl Fn(T) -> bool) {
-        assert!(!replace_if(replace_with));
-        let mut current = Vec::new();
-        current.push(start);
-        let mut next = Vec::new();
-        let mut first = true;
-        while !current.is_empty() {
-            for &pos in &current {
-                let Some(val) = self.get(pos) else { continue };
-                if !first && !replace_if(val) {
-                    continue;
-                }
-                self.set(pos, replace_with);
-                next.extend([pos + Dir::N, pos + Dir::E, pos + Dir::S, pos + Dir::E]);
-            }
-            first = false;
-            std::mem::swap(&mut current, &mut next);
-            next.clear();
-        }
-    }
-
-    pub fn count_if(&self, check: impl Fn(&T) -> bool) -> usize {
-        self.values.iter().copied().filter(check).count()
-    }
 }
 
 impl<T> Debug for Grid<T>
@@ -457,13 +355,13 @@ where
 
 #[derive(Debug, Clone)]
 struct Input {
-    pipes: Grid<Pipe>,
+    grid: Grid<Pipe>,
     start: Pos,
 }
 
 impl Input {
     fn get(&self, pos: Pos) -> Option<Pipe> {
-        self.pipes.get(pos)
+        self.grid.get(pos)
     }
 
     fn walk(&self, pos: Pos, dir: Dir) -> Option<Pos> {
@@ -506,7 +404,7 @@ impl FromStr for Input {
         let mut pipes = Vec::with_capacity(width * width);
         let mut start = Pos::new(-1, -1);
         for (c, ch) in first.bytes().enumerate() {
-            let pipe = ch.try_into()?;
+            let pipe: Pipe = ch.try_into()?;
             pipes.push(pipe);
             if pipe == Pipe::S {
                 start = Pos::new(0, isize::try_from(c)?);
@@ -525,10 +423,20 @@ impl FromStr for Input {
         if start == Pos::new(-1, -1) {
             return Err(ParseError::MissingStart);
         }
-        Ok(Self {
-            pipes: Grid::from_vec(width, height, pipes),
-            start,
-        })
+        let mut grid = Grid::from_vec(width, height, pipes);
+        let start_pipe = match [Dir::N, Dir::E, Dir::S, Dir::W]
+            .map(|d| grid.get(start + d).is_some_and(|p| p.connected(d.reverse())))
+        {
+            [true, true, false, false] => Pipe::NE,
+            [true, false, true, false] => Pipe::NS,
+            [true, false, false, true] => Pipe::NW,
+            [false, true, true, false] => Pipe::SE,
+            [false, true, false, true] => Pipe::EW,
+            [false, false, true, true] => Pipe::SW,
+            _ => return Err(ParseError::MissingStart),
+        };
+        grid.set(start, start_pipe);
+        Ok(Self { grid, start })
     }
 }
 
@@ -552,7 +460,7 @@ mod tests {
 
     #[bench]
     fn run_part_2(b: &mut Bencher) {
-        let input = INPUT.parse().expect("Parse input");
-        b.iter(|| black_box(part_2(&input)));
+        let mut input = INPUT.parse().expect("Parse input");
+        b.iter(|| black_box(part_2(&mut input)));
     }
 }
