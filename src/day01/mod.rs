@@ -239,7 +239,7 @@ mod tests {
 
 
     #[bench]
-    fn parsing(b: &mut Bencher) {
+    fn run_parse_input(b: &mut Bencher) {
         b.iter(|| parse_input(INPUT));
     }
 

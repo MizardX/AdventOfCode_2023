@@ -276,14 +276,14 @@ mod tests {
     use test::Bencher;
 
     #[bench]
-    fn bench_parse_input(b: &mut Bencher) {
+    fn run_parse_input(b: &mut Bencher) {
         b.iter(|| {
             std::hint::black_box(parse_input(include_str!("input.txt")).unwrap());
         });
     }
 
     #[bench]
-    fn bench_part_1(b: &mut Bencher) {
+    fn run_part_1(b: &mut Bencher) {
         let input = parse_input(INPUT).expect("Real input parsed");
         b.iter(|| {
             std::hint::black_box(part_1(&input));
@@ -291,7 +291,7 @@ mod tests {
     }
 
     #[bench]
-    fn bench_part_2(b: &mut Bencher) {
+    fn run_part_2(b: &mut Bencher) {
         let input = parse_input(INPUT).expect("Real input parsed");
         b.iter(|| {
             std::hint::black_box(part_2(&input));
