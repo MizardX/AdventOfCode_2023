@@ -39,24 +39,42 @@ fn part_2(input: &Input) -> u64 {
 
 fn distance_between_galaxies(input: &Input, empty_scale: u64) -> u64 {
     assert!(empty_scale > 0);
-    let mut sum_distances = 0;
-    for (i, &(r1, c1)) in input.galaxies.iter().enumerate() {
-        for &(r2, c2) in &input.galaxies[i + 1..] {
-            let dr = r1.abs_diff(r2);
-            let dc = c1.abs_diff(c2);
-            let empty_rows = input.sum_empty_rows[r1].abs_diff(input.sum_empty_rows[r2]);
-            let empty_cols = input.sum_empty_cols[c1].abs_diff(input.sum_empty_cols[c2]);
-            sum_distances += (dr + dc) as u64 + (empty_rows + empty_cols) as u64 * (empty_scale - 1);
-        }
+
+    let mut row_prev = input.galaxy_rows[0];
+    let mut row_short = 0;
+    let mut row_long = 0;
+
+    let mut col_prev = input.galaxy_cols[0];
+    let mut col_short = 0;
+    let mut col_long = 0;
+
+    let mut short_sum = 0;
+    let mut long_sum = 0;
+
+    for i in 0..input.galaxy_cols.len() {
+        let row_cur = input.galaxy_rows[i];
+        let dela_row = (row_cur - row_prev) as u64;
+        row_prev = row_cur;
+        row_short += dela_row * i as u64;
+        row_long += dela_row.saturating_sub(1) * i as u64;
+        
+        let col_cur = input.galaxy_cols[i];
+        let dela_cols = (col_cur - col_prev) as u64;
+        col_prev = col_cur;
+        col_short += dela_cols * i as u64;
+        col_long += dela_cols.saturating_sub(1) * i as u64;
+
+        short_sum += row_short + col_short;
+        long_sum += row_long + col_long;
     }
-    sum_distances
+
+    short_sum + long_sum * (empty_scale - 1)
 }
 
 #[derive(Debug, Clone)]
 struct Input {
-    galaxies: Vec<(usize, usize)>,
-    sum_empty_rows: Vec<usize>,
-    sum_empty_cols: Vec<usize>,
+    galaxy_rows: Vec<usize>,
+    galaxy_cols: Vec<usize>,
 }
 
 #[derive(Debug, Error)]
@@ -73,45 +91,31 @@ impl FromStr for Input {
     type Err = ParseInputError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut galaxies = Vec::new();
+        let mut galaxy_rows = Vec::new();
+        let mut galaxy_cols = Vec::new();
         let mut lines = s.lines().enumerate();
         let (_, first) = lines.next().ok_or(ParseInputError::EmptyInput)?;
         let width = first.len();
 
-        let mut sum_empty_cols = vec![1_usize; width];
-        let mut sum_empty_rows = Vec::new();
-
         for (r, srow) in std::iter::once((0, first)).chain(lines) {
-            sum_empty_rows.push(1);
             if srow.len() != width {
                 return Err(ParseInputError::InvaidInput);
             }
             for (c, ch) in srow.bytes().enumerate() {
                 match ch {
                     b'#' => {
-                        galaxies.push((r, c));
-                        sum_empty_rows[r] = 0;
-                        sum_empty_cols[c] = 0;
+                        galaxy_rows.push(r);
+                        galaxy_cols.push(c);
                     }
                     b'.' => (),
                     _ => return Err(ParseInputError::InvalidChar(ch as char)),
                 }
             }
         }
-        let mut running_sum = 0;
-        for row_sum in &mut sum_empty_rows {
-            running_sum += *row_sum;
-            *row_sum = running_sum;
-        }
-        running_sum = 0;
-        for col_sum in &mut sum_empty_cols {
-            running_sum += *col_sum;
-            *col_sum = running_sum;
-        }
+        galaxy_cols.sort_unstable();
         Ok(Self {
-            galaxies,
-            sum_empty_rows,
-            sum_empty_cols,
+            galaxy_rows,
+            galaxy_cols,
         })
     }
 }
