@@ -129,6 +129,10 @@ where
         let size: usize = self.counts[self.counts.len() - 1 - ix];
         let group = (T::one() << size) - T::one();
         for i in offset..=self.len - size {
+            let between_mask = (T::one() << i) - (T::one() << offset);
+            if (self.broken & between_mask) != T::zero() {
+                break;
+            }
             let broken2 = accum | (group << i);
             let masksize = i + size;
             let mask = (T::one() << masksize).saturating_sub(T::one());
