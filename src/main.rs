@@ -1,6 +1,7 @@
 #![feature(test)]
 #![feature(array_chunks)]
 #![feature(try_blocks)]
+#![feature(step_trait)]
 
 extern crate test;
 

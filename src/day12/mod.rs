@@ -1,8 +1,8 @@
 #![warn(clippy::pedantic)]
 
-use std::fmt::Debug;
 use std::str::FromStr;
 
+use num_traits::PrimInt;
 use thiserror::Error;
 
 const EXAMPLE: &str = include_str!("example.txt");
@@ -14,53 +14,31 @@ pub fn run() {
     println!("++Example");
     let example = parse_input(EXAMPLE).expect("Parse example");
     println!("|+-Part 1: {} (expected 21)", part_1(&example));
-    println!("|'-Part 2: {} (expected XXX)", part_2(&example));
+    println!("|'-Part 2: {} (expected 525 152)", part_2(&example));
 
     println!("++Input");
     let input = parse_input(INPUT).expect("Parse input");
-    println!("|+-Part 1: {} (expected 7694)", part_1(&input));
-    println!("|'-Part 2: {} (expected XXX)", part_2(&input));
+    println!("|+-Part 1: {} (expected 7 694)", part_1(&input));
+    println!("|'-Part 2: {} (expected 5 071 883 216 318)", part_2(&input));
     println!("')");
 }
 
 fn part_1(input: &[Input]) -> usize {
     let mut sum = 0;
     for spring in input {
-        let mut count = 0;
-        'mask: for mask in 0_u32..(1 << spring.len) {
-            if (mask & spring.broken) == spring.broken && (!mask & spring.working) == spring.working
-            {
-                let mut mask2 = mask;
-                for s in spring.counts.iter().copied().rev() {
-                    // mask:             1111000011110000
-                    // mask-1:           1111000011101111
-                    // mask^(mask-1):    0000000000010000 -> bit
-                    // mask+bit:         1111000100000000
-                    // !(mask+bit):      0000111011111111
-                    // mask&!(mask+bit): 0000000011110000 -> group
-                    let bit = mask2 ^ mask2.wrapping_sub(1);
-                    let group = mask2 & !(mask2 + bit);
-                    if group.count_ones() as usize != s {
-                        continue 'mask;
-                    }
-                    mask2 &= !group;
-                }
-                if mask2 != 0 {
-                    continue 'mask;
-                }
-                //println!("  {mask:00$b}", spring.len);
-                count += 1;
-            }
-        }
-        //println!("{spring:?} -> {count}");
-        sum += count;
+        sum += spring.combinations();
     }
     sum
 }
 
-#[allow(unused)]
 fn part_2(input: &[Input]) -> usize {
-    0
+    let mut sum = 0;
+    for spring in input {
+        let spring2 = spring.expand::<u128>(5);
+        let count = spring2.combinations();
+        sum += count;
+    }
+    sum
 }
 
 #[derive(Debug, Error)]
@@ -69,52 +47,125 @@ enum ParseInputError {
     InvalidInput(char),
 }
 
-#[derive(Clone)]
-struct Input {
+#[derive(Debug, Clone)]
+struct Input<T = u32> {
     len: usize,
-    working: u32,
-    broken: u32,
-    unknown: u32,
+    working: T,
+    broken: T,
     counts: Vec<usize>,
 }
 
-impl Debug for Input {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let Self {
+impl<T> Input<T>
+where
+    T: PrimInt,
+{
+    fn combinations(&self) -> usize {
+        Solver::new(self.len, self.working, self.broken, &self.counts).solve()
+    }
+
+    pub fn expand<T2>(&self, times: usize) -> Input<T2>
+    where
+        T2: PrimInt,
+    {
+        let mut len = self.len;
+        let mut working = T2::from(self.working).unwrap();
+        let mut broken = T2::from(self.broken).unwrap();
+        let mut counts = Vec::with_capacity(times * len);
+        counts.extend(&self.counts);
+
+        for _ in 1..times {
+            working = (working << (len + 1)) | working;
+            broken = (broken << (len + 1)) | broken;
+            counts.extend(&self.counts);
+        }
+
+        len = times * (len + 1) - 1;
+
+        Input {
             len,
             working,
             broken,
-            unknown,
             counts,
-        } = self;
-        write!(
-            f,
-            "<{working:0len$b} {broken:0len$b} {unknown:0len$b} {counts:?}>"
-        )
+        }
     }
 }
 
-impl FromStr for Input {
+struct Solver<'a, T> {
+    len: usize,
+    working: T,
+    broken: T,
+    counts: &'a [usize],
+    cache: Vec<Option<usize>>,
+}
+
+impl<'a, T> Solver<'a, T>
+where
+    T: PrimInt,
+{
+    pub fn new(len: usize, working: T, broken: T, counts: &'a [usize]) -> Self {
+        let cache = vec![None; (len + 2) * counts.len()];
+        Self {
+            len,
+            working,
+            broken,
+            counts,
+            cache,
+        }
+    }
+
+    pub fn solve(&mut self) -> usize {
+        self.solve_inner(T::zero(), 0, 0)
+    }
+
+    fn solve_inner(&mut self, accum: T, ix: usize, offset: usize) -> usize {
+        if ix == self.counts.len() {
+            return usize::from((accum & (self.broken | self.working)) == self.broken);
+        }
+        let key = (self.len + 2) * ix + offset;
+        if let Some(res) = self.cache[key] {
+            return res;
+        }
+        let mut sum = 0;
+        let size: usize = self.counts[self.counts.len() - 1 - ix];
+        let group = (T::one() << size) - T::one();
+        for i in offset..=self.len - size {
+            let broken2 = accum | (group << i);
+            let masksize = i + size;
+            let mask = (T::one() << masksize).saturating_sub(T::one());
+            if broken2 & (self.broken | self.working) & mask == self.broken & mask {
+                sum += self.solve_inner(broken2, ix + 1, i + size + 1);
+            }
+        }
+        self.cache[key] = Some(sum);
+        sum
+    }
+}
+
+impl<T> FromStr for Input<T>
+where
+    T: PrimInt,
+{
     type Err = ParseInputError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let zero = T::zero();
+        let one = T::one();
+
         let mut bytes = s.bytes();
         let mut len = 0;
-        let mut working = 0;
-        let mut broken = 0;
-        let mut unknown = 0;
+        let mut working = zero;
+        let mut broken = zero;
         let mut counts = Vec::with_capacity(6);
         for b in &mut bytes {
-            let (w, b, u) = match b {
-                b'.' => (1, 0, 0),
-                b'#' => (0, 1, 0),
-                b'?' => (0, 0, 1),
+            let (w, b) = match b {
+                b'.' => (one, zero),
+                b'#' => (zero, one),
+                b'?' => (zero, zero),
                 b' ' => break,
                 b => return Err(ParseInputError::InvalidInput(b as char)),
             };
             working = (working << 1) | w;
             broken = (broken << 1) | b;
-            unknown = (unknown << 1) | u;
             len += 1;
         }
         let mut num = 0;
@@ -133,7 +184,6 @@ impl FromStr for Input {
             len,
             working,
             broken,
-            unknown,
             counts,
         })
     }
