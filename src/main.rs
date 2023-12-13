@@ -2,6 +2,7 @@
 #![feature(array_chunks)]
 #![feature(try_blocks)]
 #![feature(step_trait)]
+#![feature(array_windows)]
 
 extern crate test;
 
@@ -41,7 +42,7 @@ days! {
     10 => day10,
     11 => day11,
     12 => day12,
-    // 13 => day13,
+    13 => day13,
     // 14 => day14,
     // 15 => day15,
     // 16 => day16,
