@@ -2,7 +2,7 @@
 
 use std::str::FromStr;
 
-use smallvec::{smallvec, SmallVec};
+use smallvec::SmallVec;
 use thiserror::Error;
 
 const EXAMPLE: &str = include_str!("example.txt");
@@ -12,21 +12,21 @@ pub fn run() {
     println!(".Day 13");
 
     println!("++Example");
-    let example = parse_input(EXAMPLE).expect("Parse example");
+    let example = EXAMPLE.parse().expect("Parse example");
     println!("|+-Part 1: {} (expected 405)", part_1(&example));
     println!("|'-Part 2: {} (expected 400)", part_2(&example));
 
     println!("++Input");
-    let input = parse_input(INPUT).expect("Parse input");
+    let input = INPUT.parse().expect("Parse input");
     println!("|+-Part 1: {} (expected 35232)", part_1(&input));
     println!("|'-Part 2: {} (expected 37982)", part_2(&input));
     println!("')");
 }
 
 #[allow(unused)]
-fn part_1(input: &[Input]) -> usize {
+fn part_1(input: &Input) -> usize {
     let mut sum = 0;
-    for item in input {
+    for item in &input.items {
         if let Some(r) = find_mirror_with_smudges::<0>(&item.row_masks) {
             sum += 100 * r;
         }
@@ -38,9 +38,9 @@ fn part_1(input: &[Input]) -> usize {
 }
 
 #[allow(unused)]
-fn part_2(input: &[Input]) -> usize {
+fn part_2(input: &Input) -> usize {
     let mut sum = 0;
-    for item in input {
+    for item in &input.items {
         if let Some(r) = find_mirror_with_smudges::<1>(&item.row_masks) {
             sum += 100 * r;
         }
@@ -72,15 +72,17 @@ fn find_mirror_with_smudges<const N: u32>(masks: &[u32]) -> Option<usize> {
     None
 }
 
-struct Input {
+struct Item {
     row_masks: SmallVec<[u32; 20]>,
     col_masks: SmallVec<[u32; 20]>,
 }
 
+struct Input {
+    items: Vec<Item>,
+}
+
 #[derive(Debug, Error)]
 enum ParseInputError {
-    #[error("Input is empty")]
-    EmptyInput,
     #[error("Unexpected character: '{0}'")]
     InvalidChar(char),
     #[error("Uneven row lengths; Expected {0} got {1}")]
@@ -90,44 +92,56 @@ enum ParseInputError {
 impl FromStr for Input {
     type Err = ParseInputError;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut lines = s.lines().enumerate();
-        let (_, first) = lines.next().ok_or(ParseInputError::EmptyInput)?;
-        let cols = first.len();
+    fn from_str(text: &str) -> Result<Self, Self::Err> {
+        // I'm parsing these together, to not require allocating a vec for the lines,
+        // or making a more complicated double line splitter.
+        let mut items: Vec<Item> = Vec::new();
+        let mut row = 0;
+        let mut width = 0;
         let mut row_masks = SmallVec::new();
-        let mut col_masks = smallvec![0_u32; cols];
-        for (r, row) in std::iter::once((0, first)).chain(lines) {
-            let mut row_mask = 0_u32;
-            if row.len() != cols {
-                return Err(ParseInputError::UnevenRows(cols, row.len()));
-            }
-            for (c, ch) in row.bytes().enumerate() {
-                match ch {
-                    b'.' => (),
-                    b'#' => {
-                        row_mask |= 1_u32 << c;
-                        col_masks[c] |= 1_u32 << r;
-                    }
-                    ch => return Err(ParseInputError::InvalidChar(ch as char)),
+        let mut col_masks = SmallVec::new();
+        for line in text.lines() {
+            if line.is_empty() {
+                // Empty line between test cases.
+                // Store the current test case, and reset for the next.
+                items.push(Item {
+                    row_masks: std::mem::take(&mut row_masks),
+                    col_masks: std::mem::take(&mut col_masks),
+                });
+                row = 0;
+            } else {
+                // Line inside a test-case
+                if row == 0 {
+                    // First line of a test case
+                    width = line.len();
+                    col_masks.extend(std::iter::repeat(0).take(width));
+                } else if line.len() != width {
+                    return Err(ParseInputError::UnevenRows(width, line.len()));
                 }
+                let mut row_mask = 0_u32;
+                for (col, ch) in line.bytes().enumerate() {
+                    match ch {
+                        b'.' => (),
+                        b'#' => {
+                            row_mask |= 1_u32 << col;
+                            col_masks[col] |= 1_u32 << row;
+                        }
+                        ch => return Err(ParseInputError::InvalidChar(ch as char)),
+                    }
+                }
+                row_masks.push(row_mask);
+                row += 1;
             }
-            row_masks.push(row_mask);
         }
-        Ok(Self {
-            row_masks,
-            col_masks,
-        })
+        if row > 0 {
+            // Last uncompleted test case
+            items.push(Item {
+                row_masks,
+                col_masks,
+            });
+        }
+        Ok(Self { items })
     }
-}
-
-fn parse_input(text: &str) -> Result<Vec<Input>, ParseInputError> {
-    let mut res: Vec<Input> = Vec::new();
-    for line in text.split("\r\n\r\n") {
-        // better way?
-        //println!("PARSE: {line:?}");
-        res.push(line.parse()?);
-    }
-    Ok(res)
 }
 
 #[cfg(test)]
@@ -139,18 +153,18 @@ mod tests {
 
     #[bench]
     fn run_parse_input(b: &mut Bencher) {
-        b.iter(|| black_box(parse_input(INPUT).expect("Parse input")));
+        b.iter(|| black_box(INPUT.parse::<Input>().expect("Parse input")));
     }
 
     #[bench]
     fn run_part_1(b: &mut Bencher) {
-        let input = parse_input(INPUT).expect("Parse input");
+        let input = INPUT.parse().expect("Parse input");
         b.iter(|| black_box(part_1(&input)));
     }
 
     #[bench]
     fn run_part_2(b: &mut Bencher) {
-        let input = parse_input(INPUT).expect("Parse input");
+        let input = INPUT.parse().expect("Parse input");
         b.iter(|| black_box(part_2(&input)));
     }
 }
