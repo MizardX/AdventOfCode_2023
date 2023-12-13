@@ -2,6 +2,7 @@
 
 use std::str::FromStr;
 
+use smallvec::{smallvec, SmallVec};
 use thiserror::Error;
 
 const EXAMPLE: &str = include_str!("example.txt");
@@ -71,10 +72,9 @@ fn find_mirror_with_smudges<const N: u32>(masks: &[u32]) -> Option<usize> {
     None
 }
 
-#[derive(Debug, Clone)]
 struct Input {
-    row_masks: Vec<u32>,
-    col_masks: Vec<u32>,
+    row_masks: SmallVec<[u32; 20]>,
+    col_masks: SmallVec<[u32; 20]>,
 }
 
 #[derive(Debug, Error)]
@@ -94,8 +94,8 @@ impl FromStr for Input {
         let mut lines = s.lines().enumerate();
         let (_, first) = lines.next().ok_or(ParseInputError::EmptyInput)?;
         let cols = first.len();
-        let mut row_masks = Vec::with_capacity(20);
-        let mut col_masks = vec![0_u32; cols];
+        let mut row_masks = SmallVec::new();
+        let mut col_masks = smallvec![0_u32; cols];
         for (r, row) in std::iter::once((0, first)).chain(lines) {
             let mut row_mask = 0_u32;
             if row.len() != cols {
