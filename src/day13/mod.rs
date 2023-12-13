@@ -23,10 +23,9 @@ pub fn run() {
     println!("')");
 }
 
-#[allow(unused)]
 fn part_1(input: &Input) -> usize {
     let mut sum = 0;
-    for item in &input.items {
+    for item in &input.patterns {
         if let Some(r) = find_mirror_with_smudges::<0>(&item.row_masks) {
             sum += 100 * r;
         }
@@ -37,10 +36,9 @@ fn part_1(input: &Input) -> usize {
     sum
 }
 
-#[allow(unused)]
 fn part_2(input: &Input) -> usize {
     let mut sum = 0;
-    for item in &input.items {
+    for item in &input.patterns {
         if let Some(r) = find_mirror_with_smudges::<1>(&item.row_masks) {
             sum += 100 * r;
         }
@@ -72,13 +70,13 @@ fn find_mirror_with_smudges<const N: u32>(masks: &[u32]) -> Option<usize> {
     None
 }
 
-struct Item {
+struct Pattern {
     row_masks: SmallVec<[u32; 20]>,
     col_masks: SmallVec<[u32; 20]>,
 }
 
 struct Input {
-    items: Vec<Item>,
+    patterns: Vec<Pattern>,
 }
 
 #[derive(Debug, Error)]
@@ -93,54 +91,75 @@ impl FromStr for Input {
     type Err = ParseInputError;
 
     fn from_str(text: &str) -> Result<Self, Self::Err> {
-        // I'm parsing these together, to not require allocating a vec for the lines,
-        // or making a more complicated double line splitter.
-        let mut items: Vec<Item> = Vec::new();
-        let mut row = 0;
-        let mut width = 0;
-        let mut row_masks = SmallVec::new();
-        let mut col_masks = SmallVec::new();
+        let mut patterns: Vec<Pattern> = Vec::new();
+        let mut parser = PatternParser::new();
         for line in text.lines() {
-            if line.is_empty() {
-                // Empty line between test cases.
-                // Store the current test case, and reset for the next.
-                items.push(Item {
-                    row_masks: std::mem::take(&mut row_masks),
-                    col_masks: std::mem::take(&mut col_masks),
-                });
-                row = 0;
-            } else {
-                // Line inside a test-case
-                if row == 0 {
-                    // First line of a test case
-                    width = line.len();
-                    col_masks.extend(std::iter::repeat(0).take(width));
-                } else if line.len() != width {
-                    return Err(ParseInputError::UnevenRows(width, line.len()));
-                }
-                let mut row_mask = 0_u32;
-                for (col, ch) in line.bytes().enumerate() {
-                    match ch {
-                        b'.' => (),
-                        b'#' => {
-                            row_mask |= 1_u32 << col;
-                            col_masks[col] |= 1_u32 << row;
-                        }
-                        ch => return Err(ParseInputError::InvalidChar(ch as char)),
-                    }
-                }
-                row_masks.push(row_mask);
-                row += 1;
+            if !line.is_empty() {
+                parser.parse_line(line)?;
+            } else if !parser.is_empty() {
+                // Empty line between patterns.
+                patterns.push(parser.complete());
             }
         }
-        if row > 0 {
-            // Last uncompleted test case
-            items.push(Item {
-                row_masks,
-                col_masks,
-            });
+
+        if !parser.is_empty() {
+            // Last pattern
+            patterns.push(parser.complete());
         }
-        Ok(Self { items })
+
+        Ok(Self { patterns })
+    }
+}
+
+#[derive(Default)]
+struct PatternParser {
+    row_masks: SmallVec<[u32; 20]>,
+    col_masks: SmallVec<[u32; 20]>,
+    row: usize,
+    width: usize,
+}
+
+impl PatternParser {
+    pub fn new() -> Self {
+        PatternParser::default()
+    }
+
+    pub fn parse_line(&mut self, line: &str) -> Result<(), ParseInputError> {
+        if self.row == 0 {
+            self.width = line.len();
+            self.col_masks.extend(std::iter::repeat(0).take(self.width));
+        } else if line.len() != self.width {
+            return Err(ParseInputError::UnevenRows(self.width, line.len()));
+        }
+
+        let mut row_mask = 0_u32;
+        for (col, ch) in line.bytes().enumerate() {
+            match ch {
+                b'.' => (),
+                b'#' => {
+                    row_mask |= 1_u32 << col;
+                    self.col_masks[col] |= 1_u32 << self.row;
+                }
+                ch => return Err(ParseInputError::InvalidChar(ch as char)),
+            }
+        }
+        self.row_masks.push(row_mask);
+        self.row += 1;
+        Ok(())
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.row == 0
+    }
+
+    pub fn complete(&mut self) -> Pattern {
+        let row_masks = std::mem::take(&mut self.row_masks);
+        let col_masks = std::mem::take(&mut self.row_masks);
+        self.row = 0;
+        Pattern {
+            row_masks,
+            col_masks,
+        }
     }
 }
 
