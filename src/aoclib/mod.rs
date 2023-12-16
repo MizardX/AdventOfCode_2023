@@ -1,3 +1,6 @@
+#![warn(clippy::pedantic)]
+#![allow(dead_code)]
+
 use std::fmt::Debug;
 use std::ops::Add;
 use std::str::FromStr;
@@ -10,6 +13,14 @@ pub struct Pos {
 }
 
 impl Pos {
+    pub const fn row(&self) -> isize {
+        self.row
+    }
+
+    pub const fn col(&self) -> isize {
+        self.col
+    }
+
     pub const fn new(row: isize, col: isize) -> Self {
         Self { row, col }
     }
@@ -65,7 +76,6 @@ pub struct Grid<T> {
     values: Vec<T>,
 }
 
-#[allow(dead_code)]
 impl<T> Grid<T>
 where
     T: Copy,
@@ -89,6 +99,11 @@ where
 
     pub fn get(&self, pos: Pos) -> Option<T> {
         Some(self.values[self.to_index(pos)?])
+    }
+
+    pub fn get_mut(&mut self, pos: Pos) -> Option<&mut T> {
+        let ix = self.to_index(pos)?;
+        Some(&mut self.values[ix])
     }
 
     pub fn set(&mut self, pos: Pos, value: T) {
@@ -130,6 +145,22 @@ where
             }
         }
         None
+    }
+
+    pub fn count_if(&self, mut check: impl FnMut(T) -> bool) -> usize {
+        let mut count = 0;
+        for &value in &self.values {
+            if check(value) {
+                count += 1;
+            }
+        }
+        count
+    }
+
+    pub fn reset(&mut self, initial_value: T) {
+        for x in &mut self.values {
+            *x = initial_value;
+        }
     }
 
     #[inline]
