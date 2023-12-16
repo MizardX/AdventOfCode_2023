@@ -29,6 +29,8 @@ macro_rules! days {
     };
 }
 
+mod aoclib;
+
 days! {
     01 => day01,
     02 => day02,
