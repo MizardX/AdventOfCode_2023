@@ -1,6 +1,5 @@
 #![warn(clippy::pedantic)]
 
-use smallvec::{smallvec, SmallVec};
 use std::fmt::Debug;
 use std::ops::{Index, IndexMut};
 use std::str::FromStr;
@@ -35,43 +34,49 @@ fn part_1(input: &Input) -> usize {
 
 fn shoot_laser(input: &Input, start: State, visited: &mut Grid<DirMap<bool>>) -> usize {
     visited.reset(DirMap::default());
-    let mut current = Vec::new();
-    let mut next: Vec<State> = Vec::new();
-    current.push(start);
-    while !current.is_empty() {
-        for &state in &current {
-            if matches!(visited.get(state.pos), Some(v) if v[state.dir]) {
-                continue;
+    let mut pending = Vec::new();
+    pending.push(start);
+    while let Some(mut current) = pending.pop() {
+        'inner: loop {
+            match visited.get_mut(current.pos) {
+                None => {
+                    // exists map
+                    break 'inner;
+                }
+                Some(v) => {
+                    if v[current.dir] {
+                        // already visited
+                        break 'inner;
+                    }
+                    v[current.dir] = true;
+                }
             }
-            next.extend(match (input.grid.get(state.pos), state.dir) {
-                (None, _) => continue, // exits map
-
-                (Some(Tile::MirrorTlbr), Dir::N) | (Some(Tile::MirrorTrbl), Dir::S) => {
-                    smallvec![state.turn(Dir::W).step()]
+            current = match (input.grid.get(current.pos).unwrap(), current.dir) {
+                (Tile::MirrorTlbr, Dir::N) | (Tile::MirrorTrbl, Dir::S) => {
+                    current.turn(Dir::W).step()
                 }
-                (Some(Tile::MirrorTlbr), Dir::E) | (Some(Tile::MirrorTrbl), Dir::W) => {
-                    smallvec![state.turn(Dir::S).step()]
+                (Tile::MirrorTlbr, Dir::E) | (Tile::MirrorTrbl, Dir::W) => {
+                    current.turn(Dir::S).step()
                 }
-                (Some(Tile::MirrorTlbr), Dir::S) | (Some(Tile::MirrorTrbl), Dir::N) => {
-                    smallvec![state.turn(Dir::E).step()]
+                (Tile::MirrorTlbr, Dir::S) | (Tile::MirrorTrbl, Dir::N) => {
+                    current.turn(Dir::E).step()
                 }
-                (Some(Tile::MirrorTlbr), Dir::W) | (Some(Tile::MirrorTrbl), Dir::E) => {
-                    smallvec![state.turn(Dir::N).step()]
+                (Tile::MirrorTlbr, Dir::W) | (Tile::MirrorTrbl, Dir::E) => {
+                    current.turn(Dir::N).step()
                 }
 
-                (Some(Tile::SplitterLr), Dir::N | Dir::S) => {
-                    smallvec![state.turn(Dir::W).step(), state.turn(Dir::E).step()]
+                (Tile::SplitterLr, Dir::N | Dir::S) => {
+                    pending.push(current.turn(Dir::E).step());
+                    current.turn(Dir::W).step()
                 }
-                (Some(Tile::SplitterTb), Dir::W | Dir::E) => {
-                    smallvec![state.turn(Dir::N).step(), state.turn(Dir::S).step()]
+                (Tile::SplitterTb, Dir::W | Dir::E) => {
+                    pending.push(current.turn(Dir::S).step());
+                    current.turn(Dir::N).step()
                 }
 
-                (Some(_), _) => smallvec![state.step()],
-            } as SmallVec<[State; 2]>);
-            visited.get_mut(state.pos).unwrap()[state.dir] = true;
+                _ => current.step(),
+            };
         }
-        std::mem::swap(&mut current, &mut next);
-        next.clear();
     }
     visited.count_if(|v| v[Dir::N] || v[Dir::E] || v[Dir::S] || v[Dir::W])
 }
@@ -110,7 +115,7 @@ fn part_2(input: &Input) -> usize {
     max
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Clone, Copy, Default)]
 struct DirMap<T>([T; 4]);
 
 impl<T> DirMap<T>
@@ -119,6 +124,19 @@ where
 {
     pub const fn new(initial_value: T) -> Self {
         Self([initial_value; 4])
+    }
+}
+
+impl Debug for DirMap<bool> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for d in [Dir::N, Dir::E, Dir::S, Dir::W] {
+            if self[d] {
+                write!(f, "{d:?}")?;
+            } else {
+                write!(f, "_")?;
+            }
+        }
+        Ok(())
     }
 }
 
