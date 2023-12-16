@@ -26,91 +26,21 @@ pub fn run() {
 }
 
 fn part_1(input: &Input) -> usize {
-    let width = input.grid.width();
-    let height = input.grid.height();
-    let mut visited = Grid::from_vec(width, height, vec![DirMap::default(); width * height]);
-    shoot_laser(input, State::new(Pos::new(0, 0), Dir::E), &mut visited)
-}
-
-fn shoot_laser(input: &Input, start: State, visited: &mut Grid<DirMap<bool>>) -> usize {
-    visited.reset(DirMap::default());
-    let mut pending = Vec::new();
-    pending.push(start);
-    while let Some(mut current) = pending.pop() {
-        'inner: loop {
-            match visited.get_mut(current.pos) {
-                None => {
-                    // exists map
-                    break 'inner;
-                }
-                Some(v) => {
-                    if v[current.dir] {
-                        // already visited
-                        break 'inner;
-                    }
-                    v[current.dir] = true;
-                }
-            }
-            current = match (input.grid.get(current.pos).unwrap(), current.dir) {
-                (Tile::MirrorTlbr, Dir::N) | (Tile::MirrorTrbl, Dir::S) => {
-                    current.turn(Dir::W).step()
-                }
-                (Tile::MirrorTlbr, Dir::E) | (Tile::MirrorTrbl, Dir::W) => {
-                    current.turn(Dir::S).step()
-                }
-                (Tile::MirrorTlbr, Dir::S) | (Tile::MirrorTrbl, Dir::N) => {
-                    current.turn(Dir::E).step()
-                }
-                (Tile::MirrorTlbr, Dir::W) | (Tile::MirrorTrbl, Dir::E) => {
-                    current.turn(Dir::N).step()
-                }
-
-                (Tile::SplitterLr, Dir::N | Dir::S) => {
-                    pending.push(current.turn(Dir::E).step());
-                    current.turn(Dir::W).step()
-                }
-                (Tile::SplitterTb, Dir::W | Dir::E) => {
-                    pending.push(current.turn(Dir::S).step());
-                    current.turn(Dir::N).step()
-                }
-
-                _ => current.step(),
-            };
-        }
-    }
-    visited.count_if(|v| v[Dir::N] || v[Dir::E] || v[Dir::S] || v[Dir::W])
+    MirrorMaze::from(input).shoot_laser(Turtle::new(0, 0, Dir::E))
 }
 
 fn part_2(input: &Input) -> usize {
-    let width = input.grid.width();
-    let height = input.grid.height();
-    let mut visited = Grid::from_vec(width, height, vec![DirMap::new(false); width * height]);
-    let width = isize::try_from(width).unwrap();
-    let height = isize::try_from(height).unwrap();
+    let mut maze = MirrorMaze::from(input);
+    let width = isize::try_from(input.grid.width()).unwrap();
+    let height = isize::try_from(input.grid.height()).unwrap();
     let mut max = 0;
     for r in 0..height {
-        max = max.max(shoot_laser(
-            input,
-            State::new(Pos::new(r, 0), Dir::E),
-            &mut visited,
-        ));
-        max = max.max(shoot_laser(
-            input,
-            State::new(Pos::new(r, width - 1), Dir::W),
-            &mut visited,
-        ));
+        max = max.max(maze.shoot_laser(Turtle::new(r, 0, Dir::E)));
+        max = max.max(maze.shoot_laser(Turtle::new(r, width - 1, Dir::W)));
     }
     for c in 0..width {
-        max = max.max(shoot_laser(
-            input,
-            State::new(Pos::new(0, c), Dir::S),
-            &mut visited,
-        ));
-        max = max.max(shoot_laser(
-            input,
-            State::new(Pos::new(height - 1, c), Dir::N),
-            &mut visited,
-        ));
+        max = max.max(maze.shoot_laser(Turtle::new(0, c, Dir::S)));
+        max = max.max(maze.shoot_laser(Turtle::new(height - 1, c, Dir::N)));
     }
     max
 }
@@ -118,12 +48,9 @@ fn part_2(input: &Input) -> usize {
 #[derive(Clone, Copy, Default)]
 struct DirMap<T>([T; 4]);
 
-impl<T> DirMap<T>
-where
-    T: Copy,
-{
-    pub const fn new(initial_value: T) -> Self {
-        Self([initial_value; 4])
+impl DirMap<bool> {
+    pub fn is_empty(self) -> bool {
+        self.0 == [false, false, false, false]
     }
 }
 
@@ -159,6 +86,75 @@ struct Input {
     grid: Grid<Tile>,
 }
 
+#[derive(Debug, Clone)]
+struct MirrorMaze<'a> {
+    grid: &'a Grid<Tile>,
+    visited: Grid<DirMap<bool>>,
+}
+
+impl<'a> MirrorMaze<'a> {
+    fn from(input: &'a Input) -> Self {
+        let width = input.grid.width();
+        let height = input.grid.height();
+        let visited = Grid::from_vec(width, height, vec![DirMap::default(); width * height]);
+        Self {
+            grid: &input.grid,
+            visited,
+        }
+    }
+}
+
+impl<'a> MirrorMaze<'a> {
+    fn shoot_laser(&mut self, start: Turtle) -> usize {
+        self.visited.reset(DirMap::default());
+        let mut pending = Vec::new();
+        pending.push(start);
+        'outer: while let Some(mut current) = pending.pop() {
+            loop {
+                match self.visited.get_mut(current.pos) {
+                    None => {
+                        // exists map
+                        continue 'outer;
+                    }
+                    Some(v) => {
+                        if v[current.dir] {
+                            // already visited
+                            continue 'outer;
+                        }
+                        v[current.dir] = true;
+                    }
+                }
+                current = match (self.grid.get(current.pos).unwrap(), current.dir) {
+                    (Tile::MirrorTlbr, Dir::N) | (Tile::MirrorTrbl, Dir::S) => {
+                        current.turn(Dir::W).step()
+                    }
+                    (Tile::MirrorTlbr, Dir::E) | (Tile::MirrorTrbl, Dir::W) => {
+                        current.turn(Dir::S).step()
+                    }
+                    (Tile::MirrorTlbr, Dir::S) | (Tile::MirrorTrbl, Dir::N) => {
+                        current.turn(Dir::E).step()
+                    }
+                    (Tile::MirrorTlbr, Dir::W) | (Tile::MirrorTrbl, Dir::E) => {
+                        current.turn(Dir::N).step()
+                    }
+
+                    (Tile::SplitterLr, Dir::N | Dir::S) => {
+                        pending.push(current.turn(Dir::E).step());
+                        current.turn(Dir::W).step()
+                    }
+                    (Tile::SplitterTb, Dir::W | Dir::E) => {
+                        pending.push(current.turn(Dir::S).step());
+                        current.turn(Dir::N).step()
+                    }
+
+                    _ => current.step(),
+                };
+            }
+        }
+        self.visited.count_if(|v| !v.is_empty())
+    }
+}
+
 #[derive(Debug, Error)]
 enum ParseInputError {
     #[error("Input is empty")]
@@ -183,12 +179,13 @@ impl FromStr for Input {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[repr(u8)]
 enum Tile {
-    Empty,
-    MirrorTrbl,
-    MirrorTlbr,
-    SplitterTb,
-    SplitterLr,
+    Empty = b'.',
+    MirrorTrbl = b'/',
+    MirrorTlbr = b'\\',
+    SplitterTb = b'|',
+    SplitterLr = b'-',
 }
 
 impl TryFrom<u8> for Tile {
@@ -207,13 +204,14 @@ impl TryFrom<u8> for Tile {
 }
 
 #[derive(Clone, Copy)]
-struct State {
+struct Turtle {
     pos: Pos,
     dir: Dir,
 }
 
-impl State {
-    fn new(pos: Pos, dir: Dir) -> Self {
+impl Turtle {
+    fn new(row: isize, col: isize, dir: Dir) -> Self {
+        let pos = Pos::new(row, col);
         Self { pos, dir }
     }
 
@@ -228,7 +226,7 @@ impl State {
     }
 }
 
-impl Debug for State {
+impl Debug for Turtle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("")
             .field(&self.pos.row())
