@@ -26,13 +26,13 @@ pub fn run() {
 
     println!("++Input");
     let input = INPUT.parse().expect("Parse input");
-    println!("|+-Part 1: {} (expected XXX)", part_1(&input));
-    println!("|'-Part 2: {} (expected XXX)", part_2(&input));
+    println!("|+-Part 1: {} (expected 1099)", part_1(&input));
+    println!("|'-Part 2: {} (expected 1266)", part_2(&input));
     println!("')");
 }
 
 fn part_1(input: &Input) -> usize {
-    let start = State::new(Pos::new(0, 0), Dir::E, 0, true);
+    let start = State::new(Pos::new(0, 0), Dir::E, 0);
     let goal_pos = Pos::new(
         isize::try_from(input.grid.height()).unwrap() - 1,
         isize::try_from(input.grid.width()).unwrap() - 1,
@@ -54,7 +54,7 @@ fn part_1(input: &Input) -> usize {
 }
 
 fn part_2(input: &Input) -> usize {
-    let start = State::new(Pos::new(0, 0), Dir::E, 0, true);
+    let start = State::new(Pos::new(0, 0), Dir::E, 0);
     let goal_pos = Pos::new(
         isize::try_from(input.grid.height()).unwrap() - 1,
         isize::try_from(input.grid.width()).unwrap() - 1,
@@ -80,38 +80,39 @@ struct State {
     pos: Pos,
     dir: Dir,
     straight_blocks: u8,
-    is_start: bool,
 }
 
 impl State {
-    pub fn new(pos: Pos, dir: Dir, straight_blocks: u8, is_start: bool) -> Self {
+    pub fn new(pos: Pos, dir: Dir, straight_blocks: u8) -> Self {
         Self {
             pos,
             dir,
             straight_blocks,
-            is_start,
         }
+    }
+
+    fn is_start(&self) -> bool {
+        self.straight_blocks == 0
     }
 
     fn neighbors(&self, min_dist_for_turn: u8, max_dist: u8) -> SmallVec<[Self; 3]> {
         let mut res = SmallVec::new();
-        if self.is_start {
-            res.push(Self::new(self.pos + Dir::E, Dir::E, 1, false));
-            res.push(Self::new(self.pos + Dir::S, Dir::S, 1, false));
+        if self.is_start() {
+            res.push(Self::new(self.pos + Dir::E, Dir::E, 1));
+            res.push(Self::new(self.pos + Dir::S, Dir::S, 1));
         } else {
             if self.straight_blocks < max_dist {
                 res.push(Self::new(
                     self.pos + self.dir,
                     self.dir,
                     self.straight_blocks + 1,
-                    false,
                 ));
             }
             if self.straight_blocks >= min_dist_for_turn {
                 let turn_right = self.dir.turn_cw();
                 let turn_left = self.dir.turn_ccw();
-                res.push(Self::new(self.pos + turn_right, turn_right, 1, false));
-                res.push(Self::new(self.pos + turn_left, turn_left, 1, false));
+                res.push(Self::new(self.pos + turn_right, turn_right, 1));
+                res.push(Self::new(self.pos + turn_left, turn_left, 1));
             }
         }
         res
