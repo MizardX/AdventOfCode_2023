@@ -24,6 +24,12 @@ impl Pos {
     pub const fn new(row: isize, col: isize) -> Self {
         Self { row, col }
     }
+
+    pub const fn distance(self, other: Self) -> usize {
+        let dr = self.row().abs_diff(other.row());
+        let dc = self.col().abs_diff(other.col());
+        dr + dc
+    }
 }
 
 impl Debug for Pos {
@@ -46,7 +52,7 @@ impl Add<Dir> for Pos {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Dir {
     /// North
     N,
@@ -66,6 +72,19 @@ impl Dir {
             Dir::S => Dir::N,
             Dir::W => Dir::E,
         }
+    }
+
+    pub fn turn_cw(self) -> Self {
+        match self {
+            Dir::N => Dir::E,
+            Dir::E => Dir::S,
+            Dir::S => Dir::W,
+            Dir::W => Dir::N,
+        }
+    }
+
+    pub fn turn_ccw(self) -> Self {
+        self.turn_cw().reverse()
     }
 }
 
@@ -164,7 +183,7 @@ where
     }
 
     #[inline]
-    fn is_inside(&self, pos: Pos) -> bool {
+    pub fn is_inside(&self, pos: Pos) -> bool {
         let Ok(height) = isize::try_from(self.height) else {
             return false;
         };
