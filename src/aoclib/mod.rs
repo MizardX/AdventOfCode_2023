@@ -5,6 +5,8 @@ use std::fmt::Debug;
 use std::ops::Add;
 use std::str::FromStr;
 
+use num_traits::PrimInt;
+
 /// Grid position
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Pos {
@@ -25,11 +27,33 @@ impl Pos {
         Self { row, col }
     }
 
-    pub const fn distance(self, other: Self) -> usize {
+    pub fn distance(self, other: Self) -> usize {
         let dr = self.row().abs_diff(other.row());
         let dc = self.col().abs_diff(other.col());
-        dr + dc
+        int_sqrt(dr * dr + dc * dc)
     }
+}
+
+fn int_sqrt<N: PrimInt>(x: N) -> N {
+    if x.is_zero() { return x; }
+    
+    let mut s = N::one();
+    let mut t = x;
+
+    while s < t {
+        s = s << 1;
+        t = t >> 1;
+    } 
+
+    t = s;
+    s = (x / s + s) >> 1;
+
+    while s < t {
+        t = s;
+        s = (x / s + s) >> 1;
+    }
+
+    t
 }
 
 impl Debug for Pos {

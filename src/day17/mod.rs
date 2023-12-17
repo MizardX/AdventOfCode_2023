@@ -13,7 +13,7 @@ const EXAMPLE2: &str = include_str!("example2.txt");
 const INPUT: &str = include_str!("input.txt");
 
 pub fn run() {
-    println!(".Day XX");
+    println!(".Day 17");
 
     println!("++Example 1");
     let example = EXAMPLE1.parse().expect("Parse example 1");
@@ -32,19 +32,14 @@ pub fn run() {
 }
 
 fn part_1(input: &Input) -> usize {
-    let start = State::new(Pos::new(0, 0), Dir::E, 0);
+    let start = State::new(Pos::new(0, 0), Dir::E, true);
     let goal_pos = Pos::new(
         isize::try_from(input.grid.height()).unwrap() - 1,
         isize::try_from(input.grid.width()).unwrap() - 1,
     );
-    let (_, dist) = pathfinding::prelude::astar(
+    let (_path, dist) = pathfinding::prelude::astar(
         &start,
-        |n| {
-            n.neighbors(0, 3)
-                .into_iter()
-                .filter_map(|n1| Some((n1, input.grid.get(n1.pos)?.0 as usize)))
-                .collect::<SmallVec<[_; 3]>>()
-        },
+        |n| n.neighbors(0, 3, input),
         |n| n.pos.distance(goal_pos),
         |n| n.pos.eq(&goal_pos),
     )
@@ -54,21 +49,16 @@ fn part_1(input: &Input) -> usize {
 }
 
 fn part_2(input: &Input) -> usize {
-    let start = State::new(Pos::new(0, 0), Dir::E, 0);
+    let start = State::new(Pos::new(0, 0), Dir::E, true);
     let goal_pos = Pos::new(
         isize::try_from(input.grid.height()).unwrap() - 1,
         isize::try_from(input.grid.width()).unwrap() - 1,
     );
-    let (_, dist) = pathfinding::prelude::astar(
+    let (_path, dist) = pathfinding::prelude::astar(
         &start,
-        |n| {
-            n.neighbors(4, 10)
-                .into_iter()
-                .filter_map(|n1| Some((n1, input.grid.get(n1.pos)?.0 as usize)))
-                .collect::<SmallVec<[_; 3]>>()
-        },
+        |n| n.neighbors(4, 10, input),
         |n| n.pos.distance(goal_pos),
-        |n| n.pos.eq(&goal_pos) && n.straight_blocks >= 4,
+        |n| n.pos.eq(&goal_pos),
     )
     .unwrap();
 
@@ -79,40 +69,45 @@ fn part_2(input: &Input) -> usize {
 struct State {
     pos: Pos,
     dir: Dir,
-    straight_blocks: u8,
+    is_start: bool,
 }
 
 impl State {
-    pub fn new(pos: Pos, dir: Dir, straight_blocks: u8) -> Self {
-        Self {
-            pos,
-            dir,
-            straight_blocks,
-        }
+    pub fn new(pos: Pos, dir: Dir, is_start: bool) -> Self {
+        Self { pos, dir, is_start }
     }
 
-    fn is_start(&self) -> bool {
-        self.straight_blocks == 0
-    }
-
-    fn neighbors(&self, min_dist_for_turn: u8, max_dist: u8) -> SmallVec<[Self; 3]> {
+    fn neighbors(
+        &self,
+        min_dist_for_turn: u8,
+        max_dist: u8,
+        input: &Input,
+    ) -> SmallVec<[(Self, usize); 14]> {
         let mut res = SmallVec::new();
-        if self.is_start() {
-            res.push(Self::new(self.pos + Dir::E, Dir::E, 1));
-            res.push(Self::new(self.pos + Dir::S, Dir::S, 1));
-        } else {
-            if self.straight_blocks < max_dist {
-                res.push(Self::new(
-                    self.pos + self.dir,
-                    self.dir,
-                    self.straight_blocks + 1,
-                ));
+        if self.is_start {
+            for dir in [Dir::E, Dir::S] {
+                let new_state = Self::new(self.pos, dir, false);
+                res.push((new_state, 0));
             }
-            if self.straight_blocks >= min_dist_for_turn {
-                let turn_right = self.dir.turn_cw();
-                let turn_left = self.dir.turn_ccw();
-                res.push(Self::new(self.pos + turn_right, turn_right, 1));
-                res.push(Self::new(self.pos + turn_left, turn_left, 1));
+        } else {
+            let mut pos = self.pos;
+            let mut cost = 0;
+            let turn_right = self.dir.turn_cw();
+            let turn_left = self.dir.turn_ccw();
+            for dist in 1..=max_dist {
+                pos = pos + self.dir;
+                if let Some(cell) = input.grid.get(pos) {
+                    cost += cell.0 as usize;
+                } else {
+                    break;
+                }
+                if dist >= min_dist_for_turn {
+                    for dir in [turn_left, turn_right] {
+                        let cost2 = cost;
+                        let new_state = Self::new(pos, dir, false);
+                        res.push((new_state, cost2));
+                    }
+                }
             }
         }
         res
@@ -125,12 +120,11 @@ impl Debug for State {
             .field(&self.pos.row())
             .field(&self.pos.col())
             .field(&self.dir)
-            .field(&self.straight_blocks)
             .finish()
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 struct Cell(u8);
 
 impl TryFrom<u8> for Cell {
