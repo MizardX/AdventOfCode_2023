@@ -128,10 +128,10 @@ impl Dir {
     }
 }
 
-impl Mul<u8> for Dir {
+impl Mul<usize> for Dir {
     type Output = MultiDir;
 
-    fn mul(self, count: u8) -> Self::Output {
+    fn mul(self, count: usize) -> Self::Output {
         MultiDir { dir: self, count }
     }
 }
@@ -139,7 +139,7 @@ impl Mul<u8> for Dir {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct MultiDir {
     dir: Dir,
-    count: u8,
+    count: usize,
 }
 
 impl MultiDir {
@@ -147,7 +147,7 @@ impl MultiDir {
         self.dir
     }
 
-    pub fn count(&self) -> u8 {
+    pub fn count(&self) -> usize {
         self.count
     }
 }

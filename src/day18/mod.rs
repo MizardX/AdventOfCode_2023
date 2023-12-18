@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use std::str::{Bytes, FromStr};
 use thiserror::Error;
 
-use crate::aoclib::{Dir, Grid, MultiDir, Pos};
+use crate::aoclib::{Dir, MultiDir, Pos};
 
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
@@ -15,100 +15,40 @@ pub fn run() {
     println!("++Example");
     let example = EXAMPLE.parse().expect("Parse example");
     println!("|+-Part 1: {} (expected 62)", part_1(&example));
-    println!("|'-Part 2: {} (expected XXX)", part_2(&example));
+    println!("|'-Part 2: {} (expected 952 408 144 115)", part_2(&example));
 
     println!("++Input");
     let input = INPUT.parse().expect("Parse input");
-    println!("|+-Part 1: {} (expected 47139)", part_1(&input));
-    println!("|'-Part 2: {} (expected XXX)", part_2(&input));
+    println!("|+-Part 1: {} (expected 47 139)", part_1(&input));
+    println!("|'-Part 2: {} (expected 173 152 345 887 206)", part_2(&input));
     println!("')");
 }
 
-fn part_1(input: &Input) -> usize {
+fn part_1(input: &Input) -> i64 {
+    sum_enclosed_area(input.instructions.iter().map(|instr| instr.movement))
+}
+
+fn part_2(input: &Input) -> i64 {
+    sum_enclosed_area(input.instructions.iter().map(|instr| instr.alt_movement))
+}
+
+fn sum_enclosed_area(it: impl Iterator<Item = MultiDir>) -> i64 {
     let mut pos = Pos::new(0, 0);
-    let mut min_row = 0;
-    let mut max_row = 0;
-    let mut min_col = 0;
-    let mut max_col = 0;
-    for instr in &input.instructions {
-        pos = pos + instr.movement;
-        min_row = min_row.min(pos.row());
-        max_row = max_row.max(pos.row());
-        min_col = min_col.min(pos.col());
-        max_col = max_col.max(pos.col());
-    }
-    let mut grid = Grid::new(max_col.abs_diff(min_col) + 1, max_row.abs_diff(min_row) + 1);
-    pos = Pos::new(-min_row, -min_col);
-    for instr in &input.instructions {
-        for _ in 0..instr.movement.count() {
-            pos = pos + instr.movement.dir();
-            grid.set(pos, Tile::X);
-        }
-    }
-
     let mut area = 0;
-    for r in 0..grid.height() {
-        let mut inside = false;
-        for c in 0..grid.width() {
-            let pos = Pos::new(isize::try_from(r).unwrap(), isize::try_from(c).unwrap());
-            let below = grid.get(pos + Dir::S).unwrap_or(Tile::O);
-            let cell = grid.get_mut(pos).unwrap();
-            (inside, *cell, area) = match (inside, *cell, below) {
-                (false, Tile::X, Tile::X) | (true, Tile::X, Tile::O) | (true, Tile::O, _) => {
-                    (true, Tile::A, area + 1)
-                }
-                (false, Tile::X, Tile::O) | (true, Tile::X, Tile::X) => (false, Tile::A, area + 1),
-                (inside, cell, _) => (inside, cell, area),
-            };
-        }
+    let mut border = 0;
+    for movement in it {
+        let next_pos = pos + movement;
+        area += (pos.col() * next_pos.row() - next_pos.col() * pos.row()) as i64;
+        border += i64::try_from(movement.count()).unwrap();
+        pos = next_pos;
     }
-
-    area
-}
-
-fn part_2(_input: &Input) -> usize {
-    0
-}
-
-#[derive(Clone, Copy, Default)]
-enum Tile {
-    #[default]
-    O,
-    X,
-    A,
-}
-
-impl Debug for Tile {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::O => write!(f, "."),
-            Self::X => write!(f, "#"),
-            Self::A => write!(f, "+"),
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-struct Color {
-    r: u8,
-    g: u8,
-    b: u8,
-}
-
-impl Debug for Color {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("Color")
-            .field(&self.r)
-            .field(&self.g)
-            .field(&self.b)
-            .finish()
-    }
+    (area.abs() + border) / 2 + 1 // +1 for the corners
 }
 
 #[derive(Debug, Clone, Copy)]
 struct Instruction {
     movement: MultiDir,
-    color: Color,
+    alt_movement: MultiDir,
 }
 
 impl FromStr for Instruction {
@@ -122,12 +62,12 @@ impl FromStr for Instruction {
                 Some(ch) => Err(ParseInputError::InvalidChar(ch as char)),
             }
         }
-        fn expect_hex_digit(bs: &mut Bytes<'_>) -> Result<u8, ParseInputError> {
+        fn expect_hex_digit(bs: &mut Bytes<'_>) -> Result<usize, ParseInputError> {
             match bs.next() {
                 None => Err(ParseInputError::EmptyInput),
-                Some(ch) if ch.is_ascii_digit() => Ok(ch - b'0'),
-                Some(ch @ b'A'..=b'F') => Ok(ch - b'A' + 10),
-                Some(ch @ b'a'..=b'f') => Ok(ch - b'a' + 10),
+                Some(ch) if ch.is_ascii_digit() => Ok((ch - b'0') as _),
+                Some(ch @ b'A'..=b'F') => Ok((ch - b'A' + 10) as _),
+                Some(ch @ b'a'..=b'f') => Ok((ch - b'a' + 10) as _),
                 Some(ch) => Err(ParseInputError::InvalidChar(ch as char)),
             }
         }
@@ -142,27 +82,40 @@ impl FromStr for Instruction {
             None => return Err(ParseInputError::EmptyInput),
         };
         expect(&mut bs, u8::is_ascii_whitespace)?;
-        let mut dist = expect(&mut bs, u8::is_ascii_digit)? - b'0';
+        let mut dist = (expect(&mut bs, u8::is_ascii_digit)? - b'0') as usize;
         dist = match bs.next() {
             None => return Err(ParseInputError::EmptyInput),
             Some(d) if d.is_ascii_digit() => {
                 expect(&mut bs, u8::is_ascii_whitespace)?;
-                dist * 10 + (d - b'0')
+                dist * 10 + (d - b'0') as usize
             }
             Some(w) if w.is_ascii_whitespace() => dist,
             Some(ch) => return Err(ParseInputError::InvalidChar(ch as char)),
         };
         expect(&mut bs, |&ch| ch == b'(')?;
         expect(&mut bs, |&ch| ch == b'#')?;
-        let r = expect_hex_digit(&mut bs)? * 16 + expect_hex_digit(&mut bs)?;
-        let g = expect_hex_digit(&mut bs)? * 16 + expect_hex_digit(&mut bs)?;
-        let b = expect_hex_digit(&mut bs)? * 16 + expect_hex_digit(&mut bs)?;
+        let mut alt_distance = expect_hex_digit(&mut bs)? << 16;
+        alt_distance |= expect_hex_digit(&mut bs)? << 12;
+        alt_distance |= expect_hex_digit(&mut bs)? << 8;
+        alt_distance |= expect_hex_digit(&mut bs)? << 4;
+        alt_distance |= expect_hex_digit(&mut bs)?;
+        let alt_direction = match bs.next() {
+            Some(b'0') => Dir::E,
+            Some(b'1') => Dir::S,
+            Some(b'2') => Dir::W,
+            Some(b'3') => Dir::N,
+            Some(ch) => return Err(ParseInputError::InvalidChar(ch as char)),
+            None => return Err(ParseInputError::EmptyInput),
+        };
         expect(&mut bs, |&ch| ch == b')')?;
 
         let movement = dir * dist;
-        let color = Color { r, g, b };
+        let alt_movement = alt_direction * alt_distance;
 
-        Ok(Self { movement, color })
+        Ok(Self {
+            movement,
+            alt_movement,
+        })
     }
 }
 
