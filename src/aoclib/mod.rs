@@ -2,7 +2,7 @@
 #![allow(dead_code)]
 
 use std::fmt::Debug;
-use std::ops::Add;
+use std::ops::{Add, Mul};
 use std::str::FromStr;
 
 use num_traits::PrimInt;
@@ -35,15 +35,17 @@ impl Pos {
 }
 
 fn int_sqrt<N: PrimInt>(x: N) -> N {
-    if x.is_zero() { return x; }
-    
+    if x.is_zero() {
+        return x;
+    }
+
     let mut s = N::one();
     let mut t = x;
 
     while s < t {
         s = s << 1;
         t = t >> 1;
-    } 
+    }
 
     t = s;
     s = (x / s + s) >> 1;
@@ -71,6 +73,20 @@ impl Add<Dir> for Pos {
             Dir::E => self.col += 1,
             Dir::S => self.row += 1,
             Dir::W => self.col -= 1,
+        }
+        self
+    }
+}
+
+impl Add<MultiDir> for Pos {
+    type Output = Self;
+
+    fn add(mut self, rhs: MultiDir) -> Self::Output {
+        match rhs {
+            MultiDir { dir: Dir::N, count } => self.row -= count as isize,
+            MultiDir { dir: Dir::E, count } => self.col += count as isize,
+            MultiDir { dir: Dir::S, count } => self.row += count as isize,
+            MultiDir { dir: Dir::W, count } => self.col -= count as isize,
         }
         self
     }
@@ -112,11 +128,44 @@ impl Dir {
     }
 }
 
+impl Mul<u8> for Dir {
+    type Output = MultiDir;
+
+    fn mul(self, count: u8) -> Self::Output {
+        MultiDir { dir: self, count }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MultiDir {
+    dir: Dir,
+    count: u8,
+}
+
+impl MultiDir {
+    pub fn dir(&self) -> Dir {
+        self.dir
+    }
+
+    pub fn count(&self) -> u8 {
+        self.count
+    }
+}
+
 #[derive(Clone)]
 pub struct Grid<T> {
     width: usize,
     height: usize,
     values: Vec<T>,
+}
+
+impl<T> Grid<T>
+where
+    T: Copy + Default,
+{
+    pub fn new(width: usize, height: usize) -> Self {
+        Self::from_vec(width, height, vec![Default::default(); width * height])
+    }
 }
 
 impl<T> Grid<T>
@@ -166,6 +215,15 @@ where
         let row_usize = usize::try_from(row).ok()?;
         if (0..self.height).contains(&row_usize) {
             Some(&self.values[row_usize * self.width..(row_usize + 1) * self.width])
+        } else {
+            None
+        }
+    }
+
+    pub fn get_row_mut(&mut self, row: isize) -> Option<&mut [T]> {
+        let row_usize = usize::try_from(row).ok()?;
+        if (0..self.height).contains(&row_usize) {
+            Some(&mut self.values[row_usize * self.width..(row_usize + 1) * self.width])
         } else {
             None
         }
@@ -238,7 +296,11 @@ where
         let stride = self.width;
         writeln!(f, "[")?;
         for r in 0..self.height {
-            writeln!(f, "  {:?},", &self.values[r * stride..(r + 1) * stride])?;
+            write!(f, "  ")?;
+            for cell in &self.values[r * stride..(r + 1) * stride] {
+                write!(f, "{cell:?}")?;
+            }
+            writeln!(f)?;
         }
         write!(f, "]")
     }
