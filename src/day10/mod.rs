@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use thiserror::Error;
 
-use crate::aoclib::{Grid, Pos, Dir, CommonErrors};
+use crate::aoclib::{CommonErrors, Dir, Grid, Pos};
 
 const EXAMPLE1: &str = include_str!("example1.txt");
 const EXAMPLE2: &str = include_str!("example2.txt");
@@ -26,52 +26,29 @@ pub fn run() {
     println!("|+-Part 1: {} (expected 8)", part_1(&example2));
 
     println!("++Example3");
-    let mut example3 = EXAMPLE3.parse().expect("Parse example 3");
-    println!("|+-Part 2: {} (expected 4)", part_2(&mut example3));
+    let example3 = EXAMPLE3.parse().expect("Parse example 3");
+    println!("|+-Part 2: {} (expected 4)", part_2(&example3));
 
     println!("++Example4");
-    let mut example4 = EXAMPLE4.parse().expect("Parse example 4");
-    println!("|+-Part 2: {} (expected 10)", part_2(&mut example4));
+    let example4 = EXAMPLE4.parse().expect("Parse example 4");
+    println!("|+-Part 2: {} (expected 10)", part_2(&example4));
 
     println!("++Input");
-    let mut input = INPUT.parse().expect("Parse input");
+    let input = INPUT.parse().expect("Parse input");
     println!("|+-Part 1: {} (expected 6717)", part_1(&input));
-    println!("|'-Part 2: {} (expected 381)", part_2(&mut input));
+    println!("|'-Part 2: {} (expected 381)", part_2(&input));
     println!("')");
 }
 
-fn part_1(input: &Input) -> usize {
-    // Pick one direction for the start tile
-    let enter = input
-        .neighbors(input.start)
-        .into_iter()
-        .flatten()
-        .next()
-        .unwrap()
-        .0
-        .reverse();
-
-    let mut dist = 0;
-    let mut pos = input.start;
-    let mut dir = enter;
-    loop {
-        let (next_dir, next) = input
-            .neighbors(pos)
-            .into_iter()
-            .flatten()
-            .find(|(next_dir, _)| next_dir.reverse() != dir)
-            .unwrap();
-        dist += 1;
-        pos = next;
-        dir = next_dir;
-        if pos == input.start {
-            break;
-        }
-    }
-    dist / 2
+fn part_1(input: &Input) -> isize {
+    walk_path(input).1 / 2
 }
 
-fn part_2(input: &mut Input) -> usize {
+fn part_2(input: &Input) -> isize {
+    walk_path(input).0
+}
+
+fn walk_path(input: &Input) -> (isize, isize) {
     let enter = input
         .neighbors(input.start)
         .into_iter()
@@ -81,57 +58,26 @@ fn part_2(input: &mut Input) -> usize {
         .0
         .reverse();
 
+    let mut area = 0;
+    let mut perimiter = 0;
     let mut pos = input.start;
     let mut dir = enter;
     loop {
-        input.grid.map(pos, Pipe::to_pipe);
         let (next_dir, next) = input
             .neighbors(pos)
             .into_iter()
             .flatten()
             .find(|(next_dir, _)| next_dir.reverse() != dir)
             .unwrap();
+        area += pos.col() * next.row() - next.col() * pos.row();
+        perimiter += 1;
         pos = next;
         dir = next_dir;
         if pos == input.start {
             break;
         }
     }
-    let mut count_inside = 0;
-    let mut inside = false;
-    let mut from_above = false;
-    for r in 0..isize::try_from(input.grid.height()).unwrap() {
-        for &cell in input.grid.get_row(r).unwrap() {
-            match cell {
-                Pipe::PNS => {
-                    inside = !inside;
-                }
-                Pipe::PEW => (),
-                Pipe::PNE => {
-                    from_above = true;
-                }
-                Pipe::PSE => {
-                    from_above = false;
-                }
-                Pipe::PNW => {
-                    if !from_above {
-                        inside = !inside;
-                    }
-                }
-                Pipe::PSW => {
-                    if from_above {
-                        inside = !inside;
-                    }
-                }
-                _ if inside => {
-                    count_inside += 1;
-                }
-                _ => (),
-            }
-        }
-    }
-
-    count_inside
+    ((area.abs() - perimiter) / 2 + 1, perimiter)
 }
 
 /// Underectional pipes
@@ -154,18 +100,6 @@ enum Pipe {
     SE,
     /// Starting position, with unknown direction
     S,
-    /// Path Vertical North-South
-    PNS,
-    /// Path Horizontal East-West
-    PEW,
-    /// Path North-East turn
-    PNE,
-    /// Path North-West turn
-    PNW,
-    /// Path South-West turn
-    PSW,
-    /// Path South-Eeast turn
-    PSE,
 }
 
 impl Pipe {
@@ -174,25 +108,13 @@ impl Pipe {
         matches!(
             (self, dir),
             (Pipe::S, Dir::E | Dir::N | Dir::S | Dir::W)
-                | (Pipe::NE | Pipe::PNE, Dir::E | Dir::N)
-                | (Pipe::PSE | Pipe::SE, Dir::E | Dir::S)
-                | (Pipe::EW | Pipe::PEW, Dir::E | Dir::W)
-                | (Pipe::NS | Pipe::PNS, Dir::N | Dir::S)
-                | (Pipe::NW | Pipe::PNW, Dir::N | Dir::W)
-                | (Pipe::PSW | Pipe::SW, Dir::S | Dir::W)
+                | (Pipe::NE, Dir::E | Dir::N)
+                | (Pipe::SE, Dir::E | Dir::S)
+                | (Pipe::EW, Dir::E | Dir::W)
+                | (Pipe::NS, Dir::N | Dir::S)
+                | (Pipe::NW, Dir::N | Dir::W)
+                | (Pipe::SW, Dir::S | Dir::W)
         )
-    }
-
-    pub const fn to_pipe(self) -> Self {
-        match self {
-            Pipe::NS => Pipe::PNS,
-            Pipe::EW => Pipe::PEW,
-            Pipe::NE => Pipe::PNE,
-            Pipe::NW => Pipe::PNW,
-            Pipe::SW => Pipe::PSW,
-            Pipe::SE => Pipe::PSE,
-            _ => self,
-        }
     }
 }
 
@@ -269,9 +191,10 @@ impl FromStr for Input {
         if start == Pos::new(-1, -1) {
             return Err(ParseError::MissingStart);
         }
-        let start_pipe = match [Dir::N, Dir::E, Dir::S, Dir::W]
-            .map(|d| grid.get(start + d).is_some_and(|p| p.connected(d.reverse())))
-        {
+        let start_pipe = match [Dir::N, Dir::E, Dir::S, Dir::W].map(|d| {
+            grid.get(start + d)
+                .is_some_and(|p| p.connected(d.reverse()))
+        }) {
             [true, true, false, false] => Pipe::NE,
             [true, false, true, false] => Pipe::NS,
             [true, false, false, true] => Pipe::NW,
@@ -305,7 +228,7 @@ mod tests {
 
     #[bench]
     fn run_part_2(b: &mut Bencher) {
-        let mut input = INPUT.parse().expect("Parse input");
-        b.iter(|| black_box(part_2(&mut input)));
+        let input = INPUT.parse().expect("Parse input");
+        b.iter(|| black_box(part_2(&input)));
     }
 }

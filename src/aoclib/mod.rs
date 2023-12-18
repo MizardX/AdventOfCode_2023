@@ -81,6 +81,7 @@ impl Add<Dir> for Pos {
 impl Add<MultiDir> for Pos {
     type Output = Self;
 
+    #[allow(clippy::cast_possible_wrap)]
     fn add(mut self, rhs: MultiDir) -> Self::Output {
         match rhs {
             MultiDir { dir: Dir::N, count } => self.row -= count as isize,
