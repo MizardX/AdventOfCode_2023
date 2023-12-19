@@ -32,7 +32,7 @@ pub fn run() {
     println!("')");
 }
 
-fn part_1(input: &Input) -> usize {
+fn part_1(input: &Input) -> u64 {
     let mut sum = 0;
     'parts: for &part in &input.parts {
         let mut action = input.workflow_start;
@@ -43,7 +43,7 @@ fn part_1(input: &Input) -> usize {
                 Action::Reject => continue 'parts,
             }
         }
-        sum += part.x as usize + part.m as usize + part.a as usize + part.s as usize;
+        sum += part.total_value();
     }
     sum
 }
@@ -123,6 +123,15 @@ struct Rule {
 }
 
 impl Rule {
+    fn new(field: Field, condition: Condition, value: Value, action: Action) -> Self {
+        Self {
+            field,
+            condition,
+            value,
+            action,
+        }
+    }
+
     fn process(self, part: Part) -> Option<Action> {
         match self.condition {
             Condition::Less if part[self.field] < self.value => Some(self.action),
@@ -147,16 +156,10 @@ impl Rule {
 
 impl Debug for Rule {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let Self {
-            field,
-            condition,
-            value,
-            action,
-        } = self;
         write!(
             f,
-            "{field:?} {} {value} => {action:?}",
-            *condition as u8 as char
+            "{:?} {} {} => {:?}",
+            self.field, self.condition as u8 as char, self.value, self.action
         )
     }
 }
@@ -168,6 +171,10 @@ struct Workflow {
 }
 
 impl Workflow {
+    fn new(rules: SmallVec<[Rule; 4]>, fallback: Action) -> Self {
+        Self { rules, fallback }
+    }
+
     fn process(&self, part: Part) -> Action {
         for rule in &self.rules {
             if let Some(action) = rule.process(part) {
@@ -194,6 +201,43 @@ struct Part {
     m: Value,
     a: Value,
     s: Value,
+}
+
+impl Part {
+    fn new(x: Value, m: Value, a: Value, s: Value) -> Self {
+        Self { x, m, a, s }
+    }
+
+    pub fn total_value(self) -> u64 {
+        u64::from(self.x) + u64::from(self.m) + u64::from(self.a) + u64::from(self.s)
+    }
+}
+
+impl FromStr for Part {
+    type Err = ParseInputError;
+
+    fn from_str(line: &str) -> Result<Self, Self::Err> {
+        let rest = line
+            .strip_prefix("{x=")
+            .ok_or(ParseInputError::ExpectedChar('{'))?;
+        let (x_str, rest) = rest
+            .split_once(",m=")
+            .ok_or(ParseInputError::ExpectedChar(','))?;
+        let x: Value = x_str.parse()?;
+        let (m_str, rest) = rest
+            .split_once(",a=")
+            .ok_or(ParseInputError::ExpectedChar(','))?;
+        let m: Value = m_str.parse()?;
+        let (a_str, rest) = rest
+            .split_once(",s=")
+            .ok_or(ParseInputError::ExpectedChar(','))?;
+        let a: Value = a_str.parse()?;
+        let s_str = rest
+            .strip_suffix('}')
+            .ok_or(ParseInputError::ExpectedChar('}'))?;
+        let s: Value = s_str.parse()?;
+        Ok(Self::new(x, m, a, s))
+    }
 }
 
 impl Index<Field> for Part {
@@ -231,10 +275,13 @@ struct PartRange {
 impl PartRange {
     pub fn split(&self, field: Field, value: Value) -> Option<(PartRange, PartRange)> {
         let (low, high) = self[field].split(value)?;
+
         let mut res1 = self.clone();
-        let mut res2 = self.clone();
         res1[field] = low;
+
+        let mut res2 = self.clone();
         res2[field] = high;
+
         Some((res1, res2))
     }
 
@@ -290,7 +337,7 @@ impl ValueRange {
     }
 
     pub fn count(self) -> u64 {
-        u64::from(self.end - self.start)
+        u64::from(self.end).saturating_sub(u64::from(self.start))
     }
 }
 
@@ -310,44 +357,110 @@ impl Debug for ValueRange {
     }
 }
 
-impl FromStr for Part {
-    type Err = ParseInputError;
+#[derive(Debug, Clone)]
+struct RuleBuilder<'a> {
+    field: Field,
+    condition: Condition,
+    value: Value,
+    action_str: &'a str,
+}
 
-    fn from_str(line: &str) -> Result<Self, Self::Err> {
-        let rest = line
-            .strip_prefix("{x=")
-            .ok_or(ParseInputError::ExpectedChar('{'))?;
-        let (x_str, rest) = rest
-            .split_once(",m=")
-            .ok_or(ParseInputError::ExpectedChar(','))?;
-        let x: Value = x_str.parse()?;
-        let (m_str, rest) = rest
-            .split_once(",a=")
-            .ok_or(ParseInputError::ExpectedChar(','))?;
-        let m: Value = m_str.parse()?;
-        let (a_str, rest) = rest
-            .split_once(",s=")
-            .ok_or(ParseInputError::ExpectedChar(','))?;
-        let a: Value = a_str.parse()?;
-        let s_str = rest
-            .strip_suffix('}')
-            .ok_or(ParseInputError::ExpectedChar('}'))?;
-        let s: Value = s_str.parse()?;
-        Ok(Self { x, m, a, s })
+impl<'a> RuleBuilder<'a> {
+    pub fn build(&self, name_lookup: &HashMap<&str, usize>) -> Result<Rule, ParseInputError> {
+        let action = match self.action_str {
+            "A" => Action::Accept,
+            "R" => Action::Reject,
+            ref_name => Action::Forward(
+                *name_lookup
+                    .get(&ref_name)
+                    .ok_or(ParseInputError::InvalidRuleName)?,
+            ),
+        };
+        Ok(Rule::new(self.field, self.condition, self.value, action))
+    }
+}
+
+// TryFrom<&str> intead of FromStr, since that trait does not preserve lifetime, and thus must be cloned
+impl<'a> TryFrom<&'a str> for RuleBuilder<'a> {
+    type Error = ParseInputError;
+
+    fn try_from(rule_str: &'a str) -> Result<Self, Self::Error> {
+        let rule_b = rule_str.as_bytes();
+        let field: Field = rule_b[0].try_into()?;
+        let condition: Condition = rule_b[1].try_into()?;
+        let (value_str, action_str) = rule_str[2..]
+            .split_once(':')
+            .ok_or(ParseInputError::ExpectedChar(':'))?;
+        let value: Value = value_str.parse()?;
+        Ok(Self {
+            field,
+            condition,
+            value,
+            action_str,
+        })
     }
 }
 
 #[derive(Debug, Clone)]
-struct Input {
-    workflows: Vec<Workflow>,
-    workflow_start: Action,
-    parts: Vec<Part>,
+struct WorkflowBuilder<'a> {
+    name: &'a str,
+    rules: SmallVec<[RuleBuilder<'a>; 4]>,
+    fallback_str: &'a str,
+}
+
+impl<'a> WorkflowBuilder<'a> {
+    fn new(name: &'a str, rules: SmallVec<[RuleBuilder<'a>; 4]>, fallback_str: &'a str) -> Self {
+        Self {
+            name,
+            rules,
+            fallback_str,
+        }
+    }
+
+    pub fn build(&self, name_lookup: &HashMap<&str, usize>) -> Result<Workflow, ParseInputError> {
+        let fallback = match self.fallback_str {
+            "A" => Action::Accept,
+            "R" => Action::Reject,
+            ref_name => Action::Forward(
+                *name_lookup
+                    .get(&ref_name)
+                    .ok_or(ParseInputError::InvalidRuleName)?,
+            ),
+        };
+        let rules = self
+            .rules
+            .iter()
+            .map(|r| r.build(name_lookup))
+            .collect::<Result<_, _>>()?;
+        Ok(Workflow::new(rules, fallback))
+    }
+}
+
+// TryFrom<&str> intead of FromStr, since that trait does not preserve lifetime, and thus must be cloned
+impl<'a> TryFrom<&'a str> for WorkflowBuilder<'a> {
+    type Error = ParseInputError;
+
+    fn try_from(line: &'a str) -> Result<Self, Self::Error> {
+        let (name, mut rest) = line
+            .split_once('{')
+            .ok_or(ParseInputError::ExpectedChar('{'))?;
+
+        let mut rules = SmallVec::new();
+        while let Some((rule_str, tail)) = rest.split_once(',') {
+            rules.push(rule_str.try_into()?);
+            rest = tail;
+        }
+
+        let fallback_str = rest
+            .strip_suffix('}')
+            .ok_or(ParseInputError::ExpectedChar('}'))?;
+
+        Ok(Self::new(name, rules, fallback_str))
+    }
 }
 
 #[derive(Debug, Error)]
 enum ParseInputError {
-    // #[error("Input is empty")]
-    // EmptyInput,
     #[error("Unexpected character: '{0}'")]
     InvalidChar(char),
     #[error("Did not find expected char: '{0}'")]
@@ -358,71 +471,36 @@ enum ParseInputError {
     InvalidRuleName,
 }
 
+#[derive(Debug, Clone)]
+struct Input {
+    workflows: Vec<Workflow>,
+    workflow_start: Action,
+    parts: Vec<Part>,
+}
+
 impl FromStr for Input {
     type Err = ParseInputError;
 
     fn from_str(text: &str) -> Result<Self, Self::Err> {
         let mut name_lookup = HashMap::new();
-        for line in text.lines() {
-            if line.is_empty() {
-                break;
-            }
-            let (name, _) = line
-                .split_once('{')
-                .ok_or(ParseInputError::ExpectedChar('{'))?;
-            let index = name_lookup.len();
-            name_lookup.insert(name, index);
-        }
-        let mut workflows: Vec<Workflow> = Vec::new();
+        let mut workflow_builders = Vec::new();
         let mut lines = text.lines();
         for line in &mut lines {
             if line.is_empty() {
                 break;
             }
-            let mut rules = SmallVec::new();
-            let (_, mut rest) = line.split_once('{').unwrap(); // already checked
-            while let Some((rule_str, tail)) = rest.split_once(',') {
-                let rule_b = rule_str.as_bytes();
-                let field: Field = rule_b[0].try_into()?;
-                let condition: Condition = rule_b[1].try_into()?;
-                let (value_str, action_str) = rule_str[2..]
-                    .split_once(':')
-                    .ok_or(ParseInputError::ExpectedChar(':'))?;
-                let value: Value = value_str.parse()?;
-                let action = match action_str {
-                    "A" => Action::Accept,
-                    "R" => Action::Reject,
-                    ref_name => Action::Forward(
-                        *name_lookup
-                            .get(ref_name)
-                            .ok_or(ParseInputError::InvalidRuleName)?,
-                    ),
-                };
-                rules.push(Rule {
-                    field,
-                    condition,
-                    value,
-                    action,
-                });
-                rest = tail;
-            }
-            let fallback = match rest
-                .strip_suffix('}')
-                .ok_or(ParseInputError::ExpectedChar('}'))?
-            {
-                "A" => Action::Accept,
-                "R" => Action::Reject,
-                ref_name => Action::Forward(
-                    *name_lookup
-                        .get(ref_name)
-                        .ok_or(ParseInputError::InvalidRuleName)?,
-                ),
-            };
-            workflows.push(Workflow { rules, fallback });
+            let workflow: WorkflowBuilder = line.try_into()?;
+            let index = workflow_builders.len();
+            name_lookup.insert(workflow.name, index);
+            workflow_builders.push(workflow);
         }
+        let workflows: Vec<Workflow> = workflow_builders
+            .iter()
+            .map(|w| w.build(&name_lookup))
+            .collect::<Result<_, _>>()?;
         let workflow_start = Action::Forward(
             *name_lookup
-                .get("in")
+                .get(&"in")
                 .ok_or(ParseInputError::InvalidRuleName)?,
         );
         let mut parts = Vec::new();
