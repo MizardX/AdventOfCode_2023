@@ -17,12 +17,18 @@ pub fn run() {
     println!("++Example");
     let example = EXAMPLE.parse().expect("Parse example");
     println!("|+-Part 1: {} (expected 19 114)", part_1(&example));
-    println!("|'-Part 2: {} (expected 167 409 079 868 000)", part_2(&example));
+    println!(
+        "|'-Part 2: {} (expected 167 409 079 868 000)",
+        part_2(&example)
+    );
 
     println!("++Input");
     let input = INPUT.parse().expect("Parse input");
     println!("|+-Part 1: {} (expected 382 440)", part_1(&input));
-    println!("|'-Part 2: {} (expected XXX)", part_2(&input));
+    println!(
+        "|'-Part 2: {} (expected 136 394 217 540 123)",
+        part_2(&input)
+    );
     println!("')");
 }
 
@@ -42,8 +48,18 @@ fn part_1(input: &Input) -> usize {
     sum
 }
 
-fn part_2(_input: &Input) -> usize {
-    0
+fn part_2(input: &Input) -> u64 {
+    let mut pending = Vec::new();
+    pending.push((PartRange::default(), input.workflow_start));
+    let mut sum_accepted = 0;
+    while let Some((part_range, action)) = pending.pop() {
+        match action {
+            Action::Accept => sum_accepted += part_range.count(),
+            Action::Reject => (),
+            Action::Forward(next) => input.workflows[next].split(part_range, &mut pending),
+        }
+    }
+    sum_accepted
 }
 
 type Value = u16;
@@ -107,11 +123,24 @@ struct Rule {
 }
 
 impl Rule {
-    fn process(&self, part: Part) -> Option<Action> {
+    fn process(self, part: Part) -> Option<Action> {
         match self.condition {
             Condition::Less if part[self.field] < self.value => Some(self.action),
             Condition::Greater if part[self.field] > self.value => Some(self.action),
             _ => None,
+        }
+    }
+
+    fn split(self, part_range: &PartRange) -> Option<(PartRange, Action, PartRange)> {
+        match self.condition {
+            Condition::Less => {
+                let (low, high) = part_range.split(self.field, self.value)?;
+                Some((low, self.action, high))
+            }
+            Condition::Greater => {
+                let (low, high) = part_range.split(self.field, self.value + 1)?;
+                Some((high, self.action, low))
+            }
         }
     }
 }
@@ -147,6 +176,16 @@ impl Workflow {
         }
         self.fallback
     }
+
+    fn split(&self, mut part_range: PartRange, pending: &mut Vec<(PartRange, Action)>) {
+        for &rule in &self.rules {
+            if let Some((low, action, high)) = rule.split(&part_range) {
+                pending.push((low, action));
+                part_range = high;
+            }
+        }
+        pending.push((part_range, self.fallback));
+    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -178,6 +217,96 @@ impl IndexMut<Field> for Part {
             Field::A => &mut self.a,
             Field::S => &mut self.s,
         }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct PartRange {
+    x: ValueRange,
+    m: ValueRange,
+    a: ValueRange,
+    s: ValueRange,
+}
+
+impl PartRange {
+    pub fn split(&self, field: Field, value: Value) -> Option<(PartRange, PartRange)> {
+        let (low, high) = self[field].split(value)?;
+        let mut res1 = self.clone();
+        let mut res2 = self.clone();
+        res1[field] = low;
+        res2[field] = high;
+        Some((res1, res2))
+    }
+
+    pub fn count(&self) -> u64 {
+        self.x.count() * self.m.count() * self.a.count() * self.s.count()
+    }
+}
+
+impl Index<Field> for PartRange {
+    type Output = ValueRange;
+
+    fn index(&self, index: Field) -> &Self::Output {
+        match index {
+            Field::X => &self.x,
+            Field::M => &self.m,
+            Field::A => &self.a,
+            Field::S => &self.s,
+        }
+    }
+}
+
+impl IndexMut<Field> for PartRange {
+    fn index_mut(&mut self, index: Field) -> &mut Self::Output {
+        match index {
+            Field::X => &mut self.x,
+            Field::M => &mut self.m,
+            Field::A => &mut self.a,
+            Field::S => &mut self.s,
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
+struct ValueRange {
+    start: Value,
+    end: Value,
+}
+
+impl ValueRange {
+    fn new(start: Value, end: Value) -> Self {
+        Self { start, end }
+    }
+
+    pub fn contains(self, value: Value) -> bool {
+        self.start <= value && value < self.end
+    }
+
+    pub fn split(self, value: Value) -> Option<(ValueRange, ValueRange)> {
+        self.contains(value).then_some((
+            ValueRange::new(self.start, value),
+            ValueRange::new(value, self.end),
+        ))
+    }
+
+    pub fn count(self) -> u64 {
+        u64::from(self.end - self.start)
+    }
+}
+
+impl Default for ValueRange {
+    fn default() -> Self {
+        Self {
+            start: 1,
+            end: 4001,
+        }
+    }
+}
+
+impl Debug for ValueRange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self { start, end } = self;
+        write!(f, "{start}..{end}")
     }
 }
 
