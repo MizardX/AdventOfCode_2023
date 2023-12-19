@@ -54,7 +54,9 @@ fn part_2(input: &Input) -> u64 {
     let mut sum_accepted = 0;
     while let Some((part_range, action)) = pending.pop() {
         match action {
-            Action::Accept => sum_accepted += part_range.count(),
+            Action::Accept => {
+                sum_accepted += part_range.count();
+            },
             Action::Reject => (),
             Action::Forward(next) => input.workflows[next].split(part_range, &mut pending),
         }
@@ -140,15 +142,15 @@ impl Rule {
         }
     }
 
-    fn split(self, part_range: &PartRange) -> Option<(PartRange, Action, PartRange)> {
+    fn split(self, part_range: &PartRange) -> (Option<(PartRange, Action)>, Option<PartRange>) {
         match self.condition {
             Condition::Less => {
-                let (low, high) = part_range.split(self.field, self.value)?;
-                Some((low, self.action, high))
+                let (low, high) = part_range.split(self.field, self.value);
+                (low.map(|r| (r, self.action)), high)
             }
             Condition::Greater => {
-                let (low, high) = part_range.split(self.field, self.value + 1)?;
-                Some((high, self.action, low))
+                let (low, high) = part_range.split(self.field, self.value + 1);
+                (high.map(|r| (r, self.action)), low)
             }
         }
     }
@@ -186,9 +188,15 @@ impl Workflow {
 
     fn split(&self, mut part_range: PartRange, pending: &mut Vec<(PartRange, Action)>) {
         for &rule in &self.rules {
-            if let Some((low, action, high)) = rule.split(&part_range) {
-                pending.push((low, action));
-                part_range = high;
+            let (matched, unmatched) = rule.split(&part_range);
+            if let Some((matched, action)) = matched {
+                pending.push((matched, action));
+            }
+            if let Some(unmatched) = unmatched {
+                part_range = unmatched;
+            } else {
+                // Nothing remains of the original PartRange
+                return;
             }
         }
         pending.push((part_range, self.fallback));
@@ -273,16 +281,18 @@ struct PartRange {
 }
 
 impl PartRange {
-    pub fn split(&self, field: Field, value: Value) -> Option<(PartRange, PartRange)> {
-        let (low, high) = self[field].split(value)?;
+    pub fn split(&self, field: Field, value: Value) -> (Option<PartRange>, Option<PartRange>) {
+        let (low, high) = self[field].split(value);
 
-        let mut res1 = self.clone();
-        res1[field] = low;
+        (
+            low.map(|value_range| self.clone().with(field, value_range)),
+            high.map(|value_range| self.clone().with(field, value_range)),
+        )
+    }
 
-        let mut res2 = self.clone();
-        res2[field] = high;
-
-        Some((res1, res2))
+    pub fn with(mut self, field: Field, value_range: ValueRange) -> Self {
+        self[field] = value_range;
+        self
     }
 
     pub fn count(&self) -> u64 {
@@ -325,15 +335,17 @@ impl ValueRange {
         Self { start, end }
     }
 
-    pub fn contains(self, value: Value) -> bool {
-        self.start <= value && value < self.end
-    }
-
-    pub fn split(self, value: Value) -> Option<(ValueRange, ValueRange)> {
-        self.contains(value).then_some((
-            ValueRange::new(self.start, value),
-            ValueRange::new(value, self.end),
-        ))
+    pub fn split(self, value: Value) -> (Option<ValueRange>, Option<ValueRange>) {
+        if value <= self.start {
+            (Some(self), None)
+        } else if value >= self.end {
+            (None, Some(self))
+        } else {
+            (
+                Some(ValueRange::new(self.start, value)),
+                Some(ValueRange::new(value, self.end)),
+            )
+        }
     }
 
     pub fn count(self) -> u64 {
