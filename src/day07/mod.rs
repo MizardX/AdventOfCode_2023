@@ -59,7 +59,7 @@ enum ParseInputError {
 #[repr(u8)]
 enum Card {
     #[default]
-    Two = 1,
+    Two = 1, // Start at 1, since joker becomes zero when scoring
     Three = 2,
     Four = 3,
     Five = 4,
@@ -118,40 +118,44 @@ struct Input {
 
 impl Input {
     pub fn classify(&self) -> HandType {
-        match self
-            .cards
-            .map(|c| self.cards.iter().filter(|&&c1| c1 == c).count())
-            .into_iter()
-            .sum()
+        let c = &self.cards;
+        match u8::from(c[0] == c[1])
+            + u8::from(c[0] == c[2])
+            + u8::from(c[0] == c[3])
+            + u8::from(c[0] == c[4])
+            + u8::from(c[1] == c[2])
+            + u8::from(c[1] == c[3])
+            + u8::from(c[1] == c[4])
+            + u8::from(c[2] == c[3])
+            + u8::from(c[2] == c[4])
+            + u8::from(c[3] == c[4])
         {
-            25 => HandType::FiveOfAKind,
-            17 => HandType::FourOfAKind,
-            13 => HandType::FullHouse,
-            11 => HandType::ThreeOfAKind,
-            9 => HandType::TwoPairs,
-            7 => HandType::OnePair,
-            5 => HandType::HighCard,
+            10 => HandType::FiveOfAKind,
+            6 => HandType::FourOfAKind,
+            4 => HandType::FullHouse,
+            3 => HandType::ThreeOfAKind,
+            2 => HandType::TwoPairs,
+            1 => HandType::OnePair,
+            0 => HandType::HighCard,
             _ => unreachable!(),
         }
     }
 
     pub fn classify_joker(&self) -> HandType {
         let mut jokers = 0;
-        for c in &self.cards {
-            if let Card::Jack = c {
-                jokers += 1;
-            }
+        for c in self.cards {
+            jokers += u8::from(c == Card::Jack);
         }
-        match (self.classify(), jokers) {
-            (t, 0) => t,
-            (HandType::FiveOfAKind | HandType::FourOfAKind | HandType::FullHouse, _) => {
+        match (jokers, self.classify()) {
+            (0, t) => t,
+            (1, HandType::TwoPairs) => HandType::FullHouse,
+            (_, HandType::FiveOfAKind | HandType::FourOfAKind | HandType::FullHouse) => {
                 HandType::FiveOfAKind
             }
-            (HandType::TwoPairs, 1) => HandType::FullHouse,
-            (HandType::ThreeOfAKind | HandType::TwoPairs, _) => HandType::FourOfAKind,
-            (HandType::OnePair, _) => HandType::ThreeOfAKind,
-            (HandType::HighCard, _) => HandType::OnePair,
-            _ => unreachable!(),
+            (_, HandType::ThreeOfAKind | HandType::TwoPairs) => HandType::FourOfAKind,
+            (_, HandType::OnePair) => HandType::ThreeOfAKind,
+            (_, HandType::HighCard) => HandType::OnePair,
+            (_, HandType::None) => HandType::None,
         }
     }
 
