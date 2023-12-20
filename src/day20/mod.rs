@@ -24,25 +24,58 @@ pub fn run() {
     println!("++Input");
     let input = Input::try_from(INPUT).expect("Parse input");
     println!("|+-Part 1: {} (expected 899848294)", part_1(&input));
-    println!("|'-Part 2: {} (expected XXX)", part_2(&input));
+    println!("|'-Part 2: {} (expected 247454898168563)", part_2(&input));
     println!("')");
 }
 
 fn part_1(input: &Input) -> usize {
     let mut low_count = 0;
     let mut high_count = 0;
+    simulate(input, &mut |button_press, _, activation, signal| {
+        if activation != input.button_index {
+            if signal {
+                high_count += 1;
+            } else {
+                low_count += 1;
+            }
+        }
+        if button_press == 1001 {
+            Some(low_count * high_count)
+        } else {
+            None
+        }
+    })
+}
+
+#[allow(dead_code)]
+fn part_2(input: &Input) -> usize {
+    let rx_parent = try { input.modules[input.rx_index?].sources[0] };
+    let mut rx_parent_cycle: SmallVec<[Option<usize>; 4]> = smallvec![None; 4];
+    simulate(input, &mut |button_press, source, activation, signal| {
+        if Some(activation) == rx_parent && signal {
+            let source_index = input.modules[activation]
+                .sources
+                .iter()
+                .position(|&i| i == source)
+                .unwrap();
+            rx_parent_cycle[source_index] = Some(button_press);
+            if rx_parent_cycle.iter().all(Option::is_some) {
+                return Some(rx_parent_cycle.iter().flatten().copied().reduce(lcm).unwrap());
+            }
+        }
+        None
+    })
+}
+
+fn simulate(
+    input: &Input,
+    body: &mut impl FnMut(usize, usize, usize, bool) -> Option<usize>,
+) -> usize {
     let mut state: u64 = 0;
     let mut pending = VecDeque::new();
-    for _button_press in 0..1000 {
+    for button_press in 1.. {
         pending.push_back((input.button_index, input.button_index, false));
         while let Some((source, activation, signal)) = pending.pop_front() {
-            if activation != input.button_index {
-                if signal {
-                    high_count += 1;
-                } else {
-                    low_count += 1;
-                }
-            }
             let module = &input.modules[activation];
             let sent_signal = match module.subtype {
                 ModuleType::Button => Some(false),
@@ -63,62 +96,8 @@ fn part_1(input: &Input) -> usize {
                     Some((state & module.source_mask) != module.source_mask)
                 }
             };
-            if let Some(new_signal) = sent_signal {
-                for &dest in &module.destinations {
-                    pending.push_back((activation, dest, new_signal));
-                }
-            }
-        }
-    }
-    low_count * high_count
-}
-
-#[allow(dead_code)]
-fn part_2(input: &Input) -> usize {
-    let mut flip_flop_state: u64 = 0;
-    let mut conjunciton_state: u64 = 0;
-    let mut pending = VecDeque::new();
-    let rx_parent = input.modules[input.rx_index.unwrap()].sources[0];
-    let mut rx_parent_cycle: SmallVec<[Option<usize>; 4]> = smallvec![None; 4];
-    for button_press in 1.. {
-        if (button_press % 1_000_000) == 0 {
-            println!("{button_press} button presses");
-        }
-        pending.push_back((input.button_index, input.button_index, false));
-        while let Some((source, activation, signal)) = pending.pop_front() {
-            let module = &input.modules[activation];
-            let sent_signal = match module.subtype {
-                ModuleType::Button => Some(false),
-                ModuleType::Broadcaster => Some(signal),
-                ModuleType::Sink => None,
-                ModuleType::FlipFlop => {
-                    if signal {
-                        None
-                    } else {
-                        let bit = 1u64 << activation;
-                        flip_flop_state ^= bit;
-                        Some((flip_flop_state & bit) != 0)
-                    }
-                }
-                ModuleType::Conjunction => {
-                    let bit = 1u64 << source;
-                    conjunciton_state = if signal {
-                        conjunciton_state | bit
-                    } else {
-                        conjunciton_state & !bit
-                    };
-                    Some((conjunciton_state & module.source_mask) != module.source_mask)
-                }
-            };
-            if activation == rx_parent && signal {
-                let source_index = module.sources.iter().position(|&i| i == source).unwrap();
-                rx_parent_cycle[source_index] = Some(button_press);
-                if rx_parent_cycle.iter().all(Option::is_some) {
-                    return rx_parent_cycle.into_iter().flatten().reduce(lcm).unwrap();
-                }
-            }
-            if Some(activation) == input.rx_index && !signal {
-                return button_press;
+            if let Some(res) = body(button_press, source, activation, signal) {
+                return res;
             }
             if let Some(new_signal) = sent_signal {
                 for &dest in &module.destinations {
