@@ -3,6 +3,7 @@
 use std::str::FromStr;
 
 use num_traits::PrimInt;
+use smallvec::SmallVec;
 use thiserror::Error;
 
 const EXAMPLE: &str = include_str!("example.txt");
@@ -25,17 +26,19 @@ pub fn run() {
 
 fn part_1(input: &[Input]) -> usize {
     let mut sum = 0;
+    let mut cache = vec![None; (6 + 2) * 20];
     for spring in input {
-        sum += spring.combinations();
+        sum += spring.combinations(&mut cache);
     }
     sum
 }
 
 fn part_2(input: &[Input]) -> usize {
     let mut sum = 0;
+    let mut cache = vec![None; (6 * 5 + 2) * (20 * 5 + 4)];
     for spring in input {
-        let spring2 = spring.expand::<u128>(5);
-        let count = spring2.combinations();
+        let spring2 = spring.expand::<u128, 30>(5);
+        let count = spring2.combinations(&mut cache);
         sum += count;
     }
     sum
@@ -48,104 +51,49 @@ enum ParseInputError {
 }
 
 #[derive(Debug, Clone)]
-struct Input<T = u32> {
+struct Input<T = u32, const N: usize = 6> {
     len: usize,
-    working: T,
+    mask: T,
     broken: T,
-    counts: Vec<usize>,
+    counts: SmallVec<[usize; N]>,
 }
 
-impl<T> Input<T>
+impl<T, const N: usize> Input<T, N>
 where
     T: PrimInt,
 {
-    fn combinations(&self) -> usize {
-        Solver::new(self.len, self.working, self.broken, &self.counts).solve()
+    fn combinations(&self, cache: &mut [Option<usize>]) -> usize {
+        Solver::new(self.len, self.mask, self.broken, &self.counts, cache).solve()
     }
 
-    pub fn expand<T2>(&self, times: usize) -> Input<T2>
+    pub fn expand<T2, const N2: usize>(&self, times: usize) -> Input<T2, N2>
     where
         T2: PrimInt,
     {
         let mut len = self.len;
-        let mut working = T2::from(self.working).unwrap();
+        let mut mask = T2::from(self.mask).unwrap();
         let mut broken = T2::from(self.broken).unwrap();
-        let mut counts = Vec::with_capacity(times * len);
-        counts.extend(&self.counts);
+        let mut counts = SmallVec::new();
+        counts.extend_from_slice(&self.counts);
 
         for _ in 1..times {
-            working = (working << (len + 1)) | working;
+            mask = (mask << (len + 1)) | mask;
             broken = (broken << (len + 1)) | broken;
-            counts.extend(&self.counts);
+            counts.extend_from_slice(&self.counts);
         }
 
         len = times * (len + 1) - 1;
 
         Input {
             len,
-            working,
+            mask,
             broken,
             counts,
         }
     }
 }
 
-struct Solver<'a, T> {
-    len: usize,
-    working: T,
-    broken: T,
-    counts: &'a [usize],
-    cache: Vec<Option<usize>>,
-}
-
-impl<'a, T> Solver<'a, T>
-where
-    T: PrimInt,
-{
-    pub fn new(len: usize, working: T, broken: T, counts: &'a [usize]) -> Self {
-        let cache = vec![None; (len + 2) * counts.len()];
-        Self {
-            len,
-            working,
-            broken,
-            counts,
-            cache,
-        }
-    }
-
-    pub fn solve(&mut self) -> usize {
-        self.solve_inner(T::zero(), 0, 0)
-    }
-
-    fn solve_inner(&mut self, accum: T, ix: usize, offset: usize) -> usize {
-        if ix == self.counts.len() {
-            return usize::from((accum & (self.broken | self.working)) == self.broken);
-        }
-        let key = (self.len + 2) * ix + offset;
-        if let Some(res) = self.cache[key] {
-            return res;
-        }
-        let mut sum = 0;
-        let size: usize = self.counts[self.counts.len() - 1 - ix];
-        let group = (T::one() << size) - T::one();
-        for i in offset..=self.len - size {
-            let between_mask = (T::one() << i) - (T::one() << offset);
-            if (self.broken & between_mask) != T::zero() {
-                break;
-            }
-            let broken2 = accum | (group << i);
-            let masksize = i + size;
-            let mask = (T::one() << masksize).saturating_sub(T::one());
-            if broken2 & (self.broken | self.working) & mask == self.broken & mask {
-                sum += self.solve_inner(broken2, ix + 1, i + size + 1);
-            }
-        }
-        self.cache[key] = Some(sum);
-        sum
-    }
-}
-
-impl<T> FromStr for Input<T>
+impl<T, const N: usize> FromStr for Input<T, N>
 where
     T: PrimInt,
 {
@@ -157,18 +105,18 @@ where
 
         let mut bytes = s.bytes();
         let mut len = 0;
-        let mut working = zero;
+        let mut mask = zero;
         let mut broken = zero;
-        let mut counts = Vec::with_capacity(6);
+        let mut counts = SmallVec::new();
         for b in &mut bytes {
-            let (w, b) = match b {
+            let (m, b) = match b {
                 b'.' => (one, zero),
-                b'#' => (zero, one),
+                b'#' => (one, one),
                 b'?' => (zero, zero),
                 b' ' => break,
                 b => return Err(ParseInputError::InvalidInput(b as char)),
             };
-            working = (working << 1) | w;
+            mask = (mask << 1) | m;
             broken = (broken << 1) | b;
             len += 1;
         }
@@ -186,10 +134,87 @@ where
         counts.push(num);
         Ok(Self {
             len,
-            working,
+            mask,
             broken,
             counts,
         })
+    }
+}
+
+struct Solver<'a, T> {
+    len: usize,
+    mask: T,
+    broken: T,
+    counts: &'a [usize],
+    cache: &'a mut [Option<usize>],
+}
+
+impl<'a, T> Solver<'a, T>
+where
+    T: PrimInt,
+{
+    pub fn new(
+        len: usize,
+        mask: T,
+        broken: T,
+        counts: &'a [usize],
+        cache: &'a mut [Option<usize>],
+    ) -> Self {
+        let n = (len + 2) * counts.len();
+        debug_assert!(
+            cache.len() >= n,
+            "length {len}, count {} requires at least {n} size cache, but only got {}",
+            counts.len(),
+            cache.len()
+        );
+        for x in &mut cache[0..n] {
+            *x = None;
+        }
+        Self {
+            len,
+            mask,
+            broken,
+            counts,
+            cache,
+        }
+    }
+
+    pub fn solve(&mut self) -> usize {
+        self.solve_inner(0, 0)
+    }
+
+    fn get_cached(&self, ix: usize, offset: usize) -> Option<usize> {
+        self.cache[(self.len + 2) * ix + offset]
+    }
+
+    fn set_cached(&mut self, ix: usize, offset: usize, value: usize) {
+        self.cache[(self.len + 2) * ix + offset] = Some(value);
+    }
+
+    fn solve_inner(&mut self, ix: usize, offset: usize) -> usize {
+        if ix == self.counts.len() {
+            return usize::from((self.broken >> offset).is_zero());
+        }
+        if let Some(res) = self.get_cached(ix, offset) {
+            return res;
+        }
+        let mut sum = 0;
+        let group_size: usize = self.counts[self.counts.len() - 1 - ix];
+        let group_bits = (T::one() << group_size) - T::one();
+        for group_offset in offset..=self.len - group_size {
+            let between_mask = (T::one() << group_offset) - (T::one() << offset);
+            if !(self.broken & between_mask).is_zero() {
+                break;
+            }
+            let shifted_group = group_bits << group_offset;
+            let check_mask = (shifted_group << 1) | shifted_group;
+            if self.broken & check_mask != shifted_group & self.mask {
+                continue;
+            }
+            sum += self.solve_inner(ix + 1, group_offset + group_size + 1);
+        }
+        self.set_cached(ix, offset, sum);
+        sum
     }
 }
 
