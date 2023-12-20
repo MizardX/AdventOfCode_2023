@@ -3,6 +3,7 @@
 #![feature(try_blocks)]
 #![feature(step_trait)]
 #![feature(array_windows)]
+#![feature(iterator_try_collect)]
 
 extern crate test;
 
@@ -51,7 +52,7 @@ days! {
     17 => day17,
     18 => day18,
     19 => day19,
-    // 20 => day20,
+    20 => day20,
     // 21 => day21,
     // 22 => day22,
     // 23 => day23,
