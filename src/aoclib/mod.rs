@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use std::ops::{Add, Mul};
 use std::str::FromStr;
 
-use num_traits::PrimInt;
+use num_traits::{PrimInt, Num};
 
 /// Grid position
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -339,4 +339,25 @@ where
 
 pub trait CommonErrors {
     fn empty_input() -> Self;
+}
+
+
+pub fn gcd<T>(mut a: T, mut b: T) -> T
+where
+    T: Copy + Num,
+{
+    let zero = T::zero();
+    while a != zero {
+        let r = b % a;
+        b = a;
+        a = r;
+    }
+    b
+}
+
+pub fn lcm<T>(a: T, b: T) -> T
+where
+    T: Copy + Num,
+{
+    a * b / gcd(a, b)
 }

@@ -2,9 +2,9 @@
 
 use std::str::FromStr;
 
-use num_traits::Num;
-
 use thiserror::Error;
+
+use crate::aoclib::lcm;
 
 const EXAMPLE1: &str = include_str!("example1.txt");
 const EXAMPLE2: &str = include_str!("example2.txt");
@@ -56,26 +56,6 @@ fn part_2(input: &Input) -> u64 {
         res = lcm(res, dist as u64);
     }
     res
-}
-
-fn gcd<T>(mut a: T, mut b: T) -> T
-where
-    T: Copy + Num,
-{
-    let zero = T::zero();
-    while a != zero {
-        let r = b % a;
-        b = a;
-        a = r;
-    }
-    b
-}
-
-fn lcm<T>(a: T, b: T) -> T
-where
-    T: Copy + Num,
-{
-    a * b / gcd(a, b)
 }
 
 fn distance_to_end(input: &Input, start_ix: usize) -> usize {
