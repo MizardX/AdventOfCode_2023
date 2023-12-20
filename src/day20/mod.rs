@@ -31,27 +31,25 @@ pub fn run() {
 fn part_1(input: &Input) -> usize {
     let mut low_count = 0;
     let mut high_count = 0;
-    simulate(input, &mut |button_press, _, activation, signal| {
-        if activation != input.button_index {
-            if signal {
-                high_count += 1;
-            } else {
-                low_count += 1;
-            }
-        }
+    button_mash(input, &mut |button_press, _, _, signal| {
         if button_press == 1001 {
-            Some(low_count * high_count)
-        } else {
-            None
+            return Some(low_count * high_count);
         }
+
+        if signal {
+            high_count += 1;
+        } else {
+            low_count += 1;
+        }
+
+        None
     })
 }
 
-#[allow(dead_code)]
 fn part_2(input: &Input) -> usize {
     let rx_parent = try { input.modules[input.rx_index?].sources[0] };
-    let mut rx_parent_cycle: SmallVec<[Option<usize>; 4]> = smallvec![None; 4];
-    simulate(input, &mut |button_press, source, activation, signal| {
+    let mut rx_parent_cycle = [None; 4];
+    button_mash(input, &mut |button_press, source, activation, signal| {
         if Some(activation) == rx_parent && signal {
             let source_index = input.modules[activation]
                 .sources
@@ -60,21 +58,22 @@ fn part_2(input: &Input) -> usize {
                 .unwrap();
             rx_parent_cycle[source_index] = Some(button_press);
             if rx_parent_cycle.iter().all(Option::is_some) {
-                return Some(rx_parent_cycle.iter().flatten().copied().reduce(lcm).unwrap());
+                return Some(rx_parent_cycle.into_iter().flatten().reduce(lcm).unwrap());
             }
         }
         None
     })
 }
 
-fn simulate(
+fn button_mash(
     input: &Input,
     body: &mut impl FnMut(usize, usize, usize, bool) -> Option<usize>,
 ) -> usize {
     let mut state: u64 = 0;
     let mut pending = VecDeque::new();
+    let broadcast_index = input.modules[input.button_index].destinations[0];
     for button_press in 1.. {
-        pending.push_back((input.button_index, input.button_index, false));
+        pending.push_back((input.button_index, broadcast_index, false));
         while let Some((source, activation, signal)) = pending.pop_front() {
             let module = &input.modules[activation];
             let sent_signal = match module.subtype {
@@ -96,6 +95,7 @@ fn simulate(
                     Some((state & module.source_mask) != module.source_mask)
                 }
             };
+
             if let Some(res) = body(button_press, source, activation, signal) {
                 return res;
             }
