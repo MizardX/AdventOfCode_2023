@@ -11,30 +11,71 @@ const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
 
 pub fn run() {
-    println!(".Day XX");
+    println!(".Day 21");
 
     println!("++Example");
     let example = EXAMPLE.parse().expect("Parse example");
-    println!("|+-Part 1: {} (expected 16)", part_1(&example, 6));
-    println!("|'-Part 2: {} (expected XXX)", part_2(&example));
+    println!("|+-Part 1 (6): {} (expected 16)", part_1(&example, 6));
+    println!(
+        "|'-Part 2 (500): {} (expected 167 004)",
+        part_2(&example, 500)
+    );
+    println!(
+        "|'-Part 2 (1 000): {} (expected 668 697)",
+        part_2(&example, 1000)
+    );
+    println!(
+        "|'-Part 2 (5 000): {} (expected 16 733 044)",
+        part_2(&example, 5000)
+    );
 
     println!("++Input");
     let input = INPUT.parse().expect("Parse input");
-    println!("|+-Part 1: {} (expected 3639)", part_1(&input, 64));
-    // println!("|'-Part 2: {} (expected XXX)", part_2(&input));
+    println!("|+-Part 1 (64): {} (expected 3 639)", part_1(&input, 64));
+    println!(
+        "|'-Part 2 (26 501 365): {} (expected 604 592 315 958 630)",
+        part_2(&input, 26_501_365)
+    );
     println!("')");
 }
 
-fn part_1(garden: &Garden, target_dist: usize) -> usize {
-    let mut walker = Walker::new(&garden.grid, garden.start_pos);
-    for _ in 0..target_dist {
-        walker.take_step();
-    }
-    walker.len()
+fn part_1(garden: &Garden, target_dist: usize) -> i64 {
+    plots_after_steps(garden, target_dist)
 }
 
-fn part_2(_garden: &Garden) -> usize {
-    0
+fn part_2(garden: &Garden, target_dist: usize) -> i64 {
+    plots_after_steps(garden, target_dist)
+}
+
+#[allow(clippy::cast_possible_wrap)]
+fn plots_after_steps(garden: &Garden, target_dist: usize) -> i64 {
+    let mut walker = Walker::new(&garden.grid, garden.start_pos);
+    let size = garden.grid.width();
+    let mut samples = Vec::with_capacity(size * 4);
+    for step in 0.. {
+        if step == target_dist {
+            return walker.len() as i64;
+        }
+        if step % size == target_dist % size {
+            samples.push(walker.len() as i64);
+            if samples.len() > 3 {
+                let n = samples.len();
+                let [x1, x2, x3, x4] = samples[n - 4..n] else {
+                    unreachable!()
+                };
+                if x4 - 3 * x3 + 3 * x2 - x1 == 0 {
+                    debug_assert_eq!((target_dist - step) % size, 0);
+                    let delta = ((target_dist - step) / size + 3) as i64;
+                    let a = (x1 - 2 * x2 + x3) / 2;
+                    let b = (-3 * x1 + 4 * x2 - x3) / 2;
+                    let c = x1;
+                    return (a * delta + b) * delta + c;
+                }
+            }
+        }
+        walker.take_step();
+    }
+    unreachable!()
 }
 
 struct Walker<'a> {
@@ -164,6 +205,6 @@ mod tests {
     #[bench]
     fn run_part_2(b: &mut Bencher) {
         let input = INPUT.parse().expect("Parse input");
-        b.iter(|| black_box(part_2(&input)));
+        b.iter(|| black_box(part_2(&input, 26_501_365)));
     }
 }
