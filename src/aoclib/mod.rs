@@ -2,10 +2,10 @@
 #![allow(dead_code)]
 
 use std::fmt::Debug;
-use std::ops::{Add, Mul};
+use std::ops::{Add, Index, IndexMut, Mul};
 use std::str::FromStr;
 
-use num_traits::{PrimInt, Num};
+use num_traits::{Num, PrimInt};
 
 /// Grid position
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -169,10 +169,7 @@ where
     }
 }
 
-impl<T> Grid<T>
-where
-    T: Copy,
-{
+impl<T> Grid<T> {
     pub fn from_vec(width: usize, height: usize, values: Vec<T>) -> Self {
         assert_eq!(values.len(), width * height);
         Self {
@@ -190,10 +187,6 @@ where
         self.height
     }
 
-    pub fn get(&self, pos: Pos) -> Option<T> {
-        Some(self.values[self.to_index(pos)?])
-    }
-
     pub fn get_mut(&mut self, pos: Pos) -> Option<&mut T> {
         let ix = self.to_index(pos)?;
         Some(&mut self.values[ix])
@@ -202,13 +195,6 @@ where
     pub fn set(&mut self, pos: Pos, value: T) {
         if let Some(ix) = self.to_index(pos) {
             self.values[ix] = value;
-        }
-    }
-
-    pub fn map(&mut self, pos: Pos, f: impl FnOnce(T) -> T) {
-        if let Some(ix) = self.to_index(pos) {
-            let x = &mut self.values[ix];
-            *x = f(*x);
         }
     }
 
@@ -230,6 +216,34 @@ where
         }
     }
 
+    #[inline]
+    pub fn is_inside(&self, pos: Pos) -> bool {
+        let Ok(height) = isize::try_from(self.height) else {
+            return false;
+        };
+        let Ok(width) = isize::try_from(self.width) else {
+            return false;
+        };
+        (0..height).contains(&pos.row) && (0..width).contains(&pos.col)
+    }
+
+    #[inline]
+    fn to_index(&self, pos: Pos) -> Option<usize> {
+        let Ok(width) = isize::try_from(self.width) else {
+            return None;
+        };
+        if self.is_inside(pos) {
+            usize::try_from(pos.row * width + pos.col).ok()
+        } else {
+            None
+        }
+    }
+}
+
+impl<T> Grid<T>
+where
+    T: Copy,
+{
     pub fn position(&self, mut check: impl FnMut(T) -> bool) -> Option<Pos> {
         for r in 0..self.height {
             for (c, &value) in self
@@ -265,27 +279,31 @@ where
         }
     }
 
-    #[inline]
-    pub fn is_inside(&self, pos: Pos) -> bool {
-        let Ok(height) = isize::try_from(self.height) else {
-            return false;
-        };
-        let Ok(width) = isize::try_from(self.width) else {
-            return false;
-        };
-        (0..height).contains(&pos.row) && (0..width).contains(&pos.col)
+    pub fn get(&self, pos: Pos) -> Option<T> {
+        Some(self.values[self.to_index(pos)?])
     }
 
-    #[inline]
-    fn to_index(&self, pos: Pos) -> Option<usize> {
-        let Ok(width) = isize::try_from(self.width) else {
-            return None;
-        };
-        if self.is_inside(pos) {
-            usize::try_from(pos.row * width + pos.col).ok()
-        } else {
-            None
+    pub fn map(&mut self, pos: Pos, f: impl FnOnce(T) -> T) {
+        if let Some(ix) = self.to_index(pos) {
+            let x = &mut self.values[ix];
+            *x = f(*x);
         }
+    }
+}
+
+impl<T> Index<Pos> for Grid<T> {
+    type Output = T;
+
+    fn index(&self, index: Pos) -> &Self::Output {
+        let ix = self.to_index(index).unwrap();
+        &self.values[ix]
+    }
+}
+
+impl<T> IndexMut<Pos> for Grid<T> {
+    fn index_mut(&mut self, index: Pos) -> &mut Self::Output {
+        let ix = self.to_index(index).unwrap();
+        &mut self.values[ix]
     }
 }
 
@@ -341,6 +359,29 @@ pub trait CommonErrors {
     fn empty_input() -> Self;
 }
 
+pub struct RepeatingGrid<'a, T>(&'a Grid<T>);
+
+impl<'a, T> RepeatingGrid<'a, T> {
+    pub fn new(grid: &'a Grid<T>) -> Self {
+        Self(grid)
+    }
+}
+
+impl<'a, T> Index<Pos> for RepeatingGrid<'a, T> {
+    type Output = T;
+
+    fn index(&self, index: Pos) -> &Self::Output {
+        let pos = Pos::new(
+            index
+                .row()
+                .rem_euclid(isize::try_from(self.0.height).unwrap()),
+            index
+                .col()
+                .rem_euclid(isize::try_from(self.0.width).unwrap()),
+        );
+        &self.0[pos]
+    }
+}
 
 pub fn gcd<T>(mut a: T, mut b: T) -> T
 where
