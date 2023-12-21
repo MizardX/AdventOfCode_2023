@@ -80,36 +80,41 @@ fn plots_after_steps(garden: &Garden, target_dist: usize) -> i64 {
 
 struct Walker<'a> {
     grid: RepeatingGrid<'a, Tile>,
-    current: Vec<Pos>,
-    next: Vec<Pos>,
-    next_set: HashSet<Pos>,
+    current: HashSet<Pos>,
+    next: HashSet<Pos>,
+    current_fringe: HashSet<Pos>,
+    next_fringe: HashSet<Pos>,
 }
 
 impl<'a> Walker<'a> {
     pub fn new(grid: &'a Grid<Tile>, start_pos: Pos) -> Self {
-        let mut current = Vec::with_capacity(256);
-        current.push(start_pos);
+        let mut current = HashSet::new();
+        let mut current_fringe = HashSet::new();
+        let next = HashSet::new();
+        let next_fringe = HashSet::new();
+        current_fringe.insert(start_pos);
+        current.insert(start_pos);
         Self {
             grid: RepeatingGrid::new(grid),
             current,
-            next: Vec::with_capacity(256),
-            next_set: HashSet::new(),
+            next,
+            current_fringe,
+            next_fringe,
         }
     }
 
     pub fn take_step(&mut self) {
-        self.next_set.clear();
-        for &pos in &self.current {
+        self.next_fringe.clear();
+        for &pos in &self.current_fringe {
             for dir in [Dir::N, Dir::E, Dir::S, Dir::W] {
                 let next_pos = pos + dir;
-                if matches!(self.grid[next_pos], Tile::GardenPlot) && self.next_set.insert(next_pos)
-                {
-                    self.next.push(next_pos);
+                if matches!(self.grid[next_pos], Tile::GardenPlot) && self.next.insert(next_pos) {
+                    self.next_fringe.insert(next_pos);
                 }
             }
         }
-        self.current.clear();
         std::mem::swap(&mut self.current, &mut self.next);
+        std::mem::swap(&mut self.current_fringe, &mut self.next_fringe);
     }
 
     pub fn len(&self) -> usize {
