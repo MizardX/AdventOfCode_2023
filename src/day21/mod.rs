@@ -58,18 +58,14 @@ fn plots_after_steps(garden: &Garden, target_dist: usize) -> i64 {
         }
         if step % size == target_dist % size {
             samples.push(walker.len() as i64);
-            if samples.len() > 3 {
-                let n = samples.len();
-                let [x1, x2, x3, x4] = samples[n - 4..n] else {
-                    unreachable!()
-                };
+            if let [.., x1, x2, x3, x4] = samples[..] {
                 if x4 - 3 * x3 + 3 * x2 - x1 == 0 {
                     debug_assert_eq!((target_dist - step) % size, 0);
-                    let delta = ((target_dist - step) / size + 3) as i64;
-                    let a = (x1 - 2 * x2 + x3) / 2;
-                    let b = (-3 * x1 + 4 * x2 - x3) / 2;
-                    let c = x1;
-                    return (a * delta + b) * delta + c;
+                    let delta = ((target_dist - step) / size) as i64;
+                    let a = x2 - 2 * x3 + x4;
+                    let b = x2 - 4 * x3 + 3 * x4;
+                    let c = 2 * x4;
+                    return ((a * delta + b) * delta + c) / 2;
                 }
             }
         }
