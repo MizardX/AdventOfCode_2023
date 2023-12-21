@@ -82,17 +82,17 @@ struct Walker<'a> {
     grid: RepeatingGrid<'a, Tile>,
     current: HashSet<Pos>,
     next: HashSet<Pos>,
-    current_fringe: HashSet<Pos>,
-    next_fringe: HashSet<Pos>,
+    current_fringe: Vec<Pos>,
+    next_fringe: Vec<Pos>,
 }
 
 impl<'a> Walker<'a> {
     pub fn new(grid: &'a Grid<Tile>, start_pos: Pos) -> Self {
         let mut current = HashSet::new();
-        let mut current_fringe = HashSet::new();
+        let mut current_fringe = Vec::new();
         let next = HashSet::new();
-        let next_fringe = HashSet::new();
-        current_fringe.insert(start_pos);
+        let next_fringe = Vec::new();
+        current_fringe.push(start_pos);
         current.insert(start_pos);
         Self {
             grid: RepeatingGrid::new(grid),
@@ -109,7 +109,7 @@ impl<'a> Walker<'a> {
             for dir in [Dir::N, Dir::E, Dir::S, Dir::W] {
                 let next_pos = pos + dir;
                 if matches!(self.grid[next_pos], Tile::GardenPlot) && self.next.insert(next_pos) {
-                    self.next_fringe.insert(next_pos);
+                    self.next_fringe.push(next_pos);
                 }
             }
         }
