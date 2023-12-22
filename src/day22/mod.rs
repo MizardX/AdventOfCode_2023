@@ -112,12 +112,16 @@ impl<'a> Simulator<'a> {
     pub fn count_critical(&self) -> usize {
         let n = self.board.pieces.len();
         let mut is_critical: Vec<bool> = vec![false; n];
+        let mut non_critical_count = n;
         for below_ixs in &self.touching_below {
-            if below_ixs.len() == 1 {
-                is_critical[below_ixs[0]] = true;
+            if let [single_below_ix] = below_ixs[..] {
+                if !is_critical[single_below_ix] {
+                    is_critical[single_below_ix] = true;
+                    non_critical_count -= 1;
+                }
             }
         }
-        is_critical.iter().filter(|&&c| !c).count()
+        non_critical_count
     }
 
     pub fn sum_knocked_down(&self) -> usize {
@@ -139,8 +143,8 @@ impl<'a> Simulator<'a> {
                     }
                 }
                 falling[falling_ix] = true;
+                sum += 1;
             }
-            sum += falling.iter().filter(|&&f| f).count() - 1;
         }
         sum
     }
