@@ -43,8 +43,8 @@ fn part_2(board: &Board) -> usize {
 struct Simulator<'a> {
     board: &'a Board,
     z_offset: Vec<u16>,
-    touching_above: Vec<SmallVec<[usize; 4]>>,
-    touching_below: Vec<SmallVec<[usize; 4]>>,
+    touching_from_above: Vec<SmallVec<[usize; 4]>>,
+    touching_from_below: Vec<SmallVec<[usize; 4]>>,
 }
 
 impl<'a> Simulator<'a> {
@@ -56,56 +56,78 @@ impl<'a> Simulator<'a> {
         Self {
             board,
             z_offset,
-            touching_above,
-            touching_below,
+            touching_from_above: touching_above,
+            touching_from_below: touching_below,
         }
+    }
+
+    fn get_piece_high_z(&self, piece_ix: usize) -> u16 {
+        self.board.pieces[piece_ix].high.z - self.z_offset[piece_ix]
+    }
+
+    fn lower_piece_onto(&mut self, piece_ix: usize, max_z: u16) {
+        self.z_offset[piece_ix] = self.board.pieces[piece_ix].low.z - (max_z + 1);
     }
 
     #[allow(clippy::cast_possible_wrap)]
     pub fn settle(&mut self) {
+        // Grid to keep track of the topmost brick in each column
         let mut grid: Grid<Option<usize>> = Grid::new(
             (self.board.max.x - self.board.min.x + 1) as usize,
             (self.board.max.y - self.board.min.y + 1) as usize,
         );
+
+        // Bottom to top
         for (piece_ix, piece) in self.board.pieces.iter().enumerate() {
+
+            // Find the height of the highest brick below this one
             let mut max_z = 0;
             for y in piece.low.y..=piece.high.y {
                 for x in piece.low.x..=piece.high.x {
-                    let below_ix = grid
+                    let column_below_ix = grid
                         .get_mut(Pos::new(
                             x as isize - self.board.min.x as isize,
                             y as isize - self.board.min.y as isize,
                         ))
                         .unwrap();
-                    if let Some(below_ix) = *below_ix {
-                        let below_high_z =
-                            self.board.pieces[below_ix].high.z - self.z_offset[below_ix];
+
+                    if let Some(column_below_ix) = *column_below_ix {
+                        // There is a brick in this column. Compare it's top Z value
+                        let below_high_z = self.get_piece_high_z(column_below_ix);
                         max_z = max_z.max(below_high_z);
                     }
                 }
             }
+
+            // Connect those that are high enough to touch where the new brick will land
             for y in piece.low.y..=piece.high.y {
                 for x in piece.low.x..=piece.high.x {
-                    let below_ix = grid
+                    let column_below_ix = grid
                         .get_mut(Pos::new(
                             x as isize - self.board.min.x as isize,
                             y as isize - self.board.min.y as isize,
                         ))
                         .unwrap();
-                    if let Some(below_ix) = *below_ix {
-                        let below_high_z =
-                            self.board.pieces[below_ix].high.z - self.z_offset[below_ix];
+
+                    if let Some(column_below_ix) = *column_below_ix {
+                        // There is a brick in this column. Check if it reaches the new brick
+                        let below_high_z = self.get_piece_high_z(column_below_ix);
+
                         if max_z == below_high_z
-                            && !self.touching_below[piece_ix].contains(&below_ix)
+                            && !self.touching_from_below[piece_ix].contains(&column_below_ix)
                         {
-                            self.touching_below[piece_ix].push(below_ix);
-                            self.touching_above[below_ix].push(piece_ix);
+                            // Connect them
+                            self.touching_from_below[piece_ix].push(column_below_ix);
+                            self.touching_from_above[column_below_ix].push(piece_ix);
                         }
                     }
-                    *below_ix = Some(piece_ix);
+
+                    // Update the top piece in the column
+                    *column_below_ix = Some(piece_ix);
                 }
             }
-            self.z_offset[piece_ix] = piece.low.z - max_z - 1;
+
+            self.lower_piece_onto(piece_ix, max_z);
         }
     }
 
@@ -113,8 +135,9 @@ impl<'a> Simulator<'a> {
         let n = self.board.pieces.len();
         let mut is_critical: Vec<bool> = vec![false; n];
         let mut non_critical_count = n;
-        for below_ixs in &self.touching_below {
+        for below_ixs in &self.touching_from_below {
             if let [single_below_ix] = below_ixs[..] {
+                // Some piece has only one supporter (single_below_ix)
                 if !is_critical[single_below_ix] {
                     is_critical[single_below_ix] = true;
                     non_critical_count -= 1;
@@ -126,27 +149,36 @@ impl<'a> Simulator<'a> {
 
     pub fn sum_knocked_down(&self) -> usize {
         let n = self.board.pieces.len();
-        let mut sum = 0;
+        let mut count_falling = 0;
         let mut falling = vec![false; n];
+        // Bottom to top
         for piece_ix in 0..n {
             for x in &mut falling {
                 *x = false;
             }
             falling[piece_ix] = true;
+
+            // Every piece above this one
             'falling: for falling_ix in piece_ix..n {
-                if self.touching_below[falling_ix].is_empty() {
+                if self.touching_from_below[falling_ix].is_empty() {
+                    // Ground piece. It has no non-falling supporters, but it is supported by the ground.
                     continue;
                 }
-                for &below_ix in &self.touching_below[falling_ix] {
+
+                for &below_ix in &self.touching_from_below[falling_ix] {
                     if !falling[below_ix] {
+                        // A non-falling supporter, so this piece will not fall.
                         continue 'falling;
                     }
                 }
+
+                // This piece is now falling
                 falling[falling_ix] = true;
-                sum += 1;
+                count_falling += 1;
             }
         }
-        sum
+
+        count_falling
     }
 }
 
@@ -275,10 +307,6 @@ impl FromStr for Board {
 
 #[derive(Debug, Error)]
 enum ParseInputError {
-    // #[error("Input is empty")]
-    // EmptyInput,
-    // #[error("Unexpected character: '{0}'")]
-    // InvalidChar(char),
     #[error("Expected character: '{0}'")]
     ExpectedChar(char),
     #[error("Not an integer: {0:?}")]
