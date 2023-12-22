@@ -1,6 +1,6 @@
 #![warn(clippy::pedantic)]
 
-use std::collections::HashSet;
+use smallvec::SmallVec;
 use std::fmt::Debug;
 use std::num::ParseIntError;
 use std::str::FromStr;
@@ -17,78 +17,133 @@ pub fn run() {
     println!("++Example");
     let example = EXAMPLE.parse().expect("Parse example");
     println!("|+-Part 1: {} (expected 5)", part_1(&example));
-    println!("|'-Part 2: {} (expected XXX)", part_2(&example));
+    println!("|'-Part 2: {} (expected 7)", part_2(&example));
 
     println!("++Input");
     let input = INPUT.parse().expect("Parse input");
     println!("|+-Part 1: {} (expected 465)", part_1(&input));
-    println!("|'-Part 2: {} (expected XXX)", part_2(&input));
+    println!("|'-Part 2: {} (expected 79 042)", part_2(&input));
     println!("')");
 }
 
 #[allow(clippy::cast_possible_wrap)]
 fn part_1(board: &Board) -> usize {
-    let mut grid: Grid<Option<usize>> = Grid::new(
-        (board.max.x - board.min.x + 1) as usize,
-        (board.max.y - board.min.y + 1) as usize,
-    );
-    let mut relations: HashSet<(usize, usize)> = HashSet::new();
-    let mut z_offset = vec![0; board.pieces.len()];
-    let mut below_count = vec![0; board.pieces.len()];
-    let mut above_count = vec![0; board.pieces.len()];
-    for (piece_ix, piece) in board.pieces.iter().enumerate() {
-        let mut max_z = 0;
-        for y in piece.low.y..=piece.high.y {
-            for x in piece.low.x..=piece.high.x {
-                let below_ix = grid
-                    .get_mut(Pos::new(
-                        x as isize - board.min.x as isize,
-                        y as isize - board.min.y as isize,
-                    ))
-                    .unwrap();
-                if let Some(below_ix) = *below_ix {
-                    let below_high_z = board.pieces[below_ix].high.z - z_offset[below_ix];
-                    max_z = max_z.max(below_high_z);
-                }
-            }
-        }
-        for y in piece.low.y..=piece.high.y {
-            for x in piece.low.x..=piece.high.x {
-                let below_ix = grid
-                    .get_mut(Pos::new(
-                        x as isize - board.min.x as isize,
-                        y as isize - board.min.y as isize,
-                    ))
-                    .unwrap();
-                if let Some(below_ix) = *below_ix {
-                    let below_high_z = board.pieces[below_ix].high.z - z_offset[below_ix];
-                    if max_z == below_high_z && relations.insert((piece_ix, below_ix)) {
-                        below_count[piece_ix] += 1;
-                        above_count[below_ix] += 1;
-                    }
-                }
-                *below_ix = Some(piece_ix);
-            }
-        }
-        z_offset[piece_ix] = piece.low.z - max_z - 1;
-    }
-    // A piece can be removed iif it is not the only one supporting some brick above
-    // remove B iif for all A where B supports A and below_count[A] != 1
-    let mut blocks = vec![0; board.pieces.len()];
-    for (above_ix, &below_count) in below_count.iter().enumerate() {
-        if below_count == 1 {
-            for (below_ix, blocks) in blocks.iter_mut().enumerate() {
-                if relations.contains(&(above_ix, below_ix)) {
-                    *blocks += 1;
-                }
-            }
-        }
-    }
-    blocks.iter().filter(|&&n| n == 0).count()
+    let mut simulator = Simulator::new(board);
+    simulator.settle();
+    simulator.count_critical()
 }
 
-fn part_2(_input: &Board) -> usize {
-    0
+fn part_2(board: &Board) -> usize {
+    let mut simulator = Simulator::new(board);
+    simulator.settle();
+    simulator.sum_knocked_down()
+}
+
+#[derive(Debug)]
+struct Simulator<'a> {
+    board: &'a Board,
+    z_offset: Vec<u16>,
+    touching_above: Vec<SmallVec<[usize; 4]>>,
+    touching_below: Vec<SmallVec<[usize; 4]>>,
+}
+
+impl<'a> Simulator<'a> {
+    fn new(board: &'a Board) -> Self {
+        let n = board.pieces.len();
+        let z_offset: Vec<u16> = vec![0; n];
+        let touching_above: Vec<SmallVec<[usize; 4]>> = vec![SmallVec::new(); n];
+        let touching_below: Vec<SmallVec<[usize; 4]>> = vec![SmallVec::new(); n];
+        Self {
+            board,
+            z_offset,
+            touching_above,
+            touching_below,
+        }
+    }
+
+    #[allow(clippy::cast_possible_wrap)]
+    pub fn settle(&mut self) {
+        let mut grid: Grid<Option<usize>> = Grid::new(
+            (self.board.max.x - self.board.min.x + 1) as usize,
+            (self.board.max.y - self.board.min.y + 1) as usize,
+        );
+        for (piece_ix, piece) in self.board.pieces.iter().enumerate() {
+            let mut max_z = 0;
+            for y in piece.low.y..=piece.high.y {
+                for x in piece.low.x..=piece.high.x {
+                    let below_ix = grid
+                        .get_mut(Pos::new(
+                            x as isize - self.board.min.x as isize,
+                            y as isize - self.board.min.y as isize,
+                        ))
+                        .unwrap();
+                    if let Some(below_ix) = *below_ix {
+                        let below_high_z =
+                            self.board.pieces[below_ix].high.z - self.z_offset[below_ix];
+                        max_z = max_z.max(below_high_z);
+                    }
+                }
+            }
+            for y in piece.low.y..=piece.high.y {
+                for x in piece.low.x..=piece.high.x {
+                    let below_ix = grid
+                        .get_mut(Pos::new(
+                            x as isize - self.board.min.x as isize,
+                            y as isize - self.board.min.y as isize,
+                        ))
+                        .unwrap();
+                    if let Some(below_ix) = *below_ix {
+                        let below_high_z =
+                            self.board.pieces[below_ix].high.z - self.z_offset[below_ix];
+                        if max_z == below_high_z
+                            && !self.touching_below[piece_ix].contains(&below_ix)
+                        {
+                            self.touching_below[piece_ix].push(below_ix);
+                            self.touching_above[below_ix].push(piece_ix);
+                        }
+                    }
+                    *below_ix = Some(piece_ix);
+                }
+            }
+            self.z_offset[piece_ix] = piece.low.z - max_z - 1;
+        }
+    }
+
+    pub fn count_critical(&self) -> usize {
+        let n = self.board.pieces.len();
+        let mut is_critical: Vec<bool> = vec![false; n];
+        for below_ixs in &self.touching_below {
+            if below_ixs.len() == 1 {
+                is_critical[below_ixs[0]] = true;
+            }
+        }
+        is_critical.iter().filter(|&&c| !c).count()
+    }
+
+    pub fn sum_knocked_down(&self) -> usize {
+        let n = self.board.pieces.len();
+        let mut sum = 0;
+        let mut falling = vec![false; n];
+        for piece_ix in 0..n {
+            for x in &mut falling {
+                *x = false;
+            }
+            falling[piece_ix] = true;
+            'falling: for falling_ix in piece_ix..n {
+                if self.touching_below[falling_ix].is_empty() {
+                    continue;
+                }
+                for &below_ix in &self.touching_below[falling_ix] {
+                    if !falling[below_ix] {
+                        continue 'falling;
+                    }
+                }
+                falling[falling_ix] = true;
+            }
+            sum += falling.iter().filter(|&&f| f).count() - 1;
+        }
+        sum
+    }
 }
 
 #[derive(Copy, Clone)]
