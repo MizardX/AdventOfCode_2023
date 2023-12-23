@@ -1,6 +1,10 @@
 #![warn(clippy::pedantic)]
 
+use std::num::ParseIntError;
 use std::str::FromStr;
+
+use smallvec::SmallVec;
+use thiserror::Error;
 
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
@@ -9,55 +13,59 @@ pub fn run() {
     println!(".Day 02");
 
     println!("++Example");
-    let example = parse_input(EXAMPLE);
+    let example = EXAMPLE.parse().expect("Parse example");
     println!("|+-Part 1: {} (expected 8)", part_1(&example));
     println!("|'-Part 2: {} (expected 2286)", part_2(&example));
 
     println!("++Input");
-    let input = parse_input(INPUT);
+    let input = INPUT.parse().expect("Parse input");
     println!("|+-Part 1: {} (expected 2176)", part_1(&input));
     println!("|'-Part 2: {} (expected 63700)", part_2(&input));
     println!("')");
 }
 
 #[allow(unused)]
-fn part_1(input: &[Input]) -> usize {
-    let mut sum = 0;
-    'outer: for game in input {
-        for &piece in &game.rounds {
-            if !piece.is_possible() {
-                continue 'outer;
-            }
-        }
-        sum += game.id;
-    }
-    sum
+fn part_1(input: &Input) -> usize {
+    input
+        .games
+        .iter()
+        .filter(|g| g.rounds.iter().copied().all(Round::is_possible))
+        .map(|g| g.id)
+        .sum()
 }
 
 #[allow(unused)]
-fn part_2(input: &[Input]) -> usize {
-    let mut sum = 0;
-    for game in input {
-        let mut target = Round::new();
-        for &piece in &game.rounds {
-            target.max_assign(piece);
-        }
-        sum += target.power();
-    }
-    sum
+fn part_2(input: &Input) -> usize {
+    input
+        .games
+        .iter()
+        .map(|g| {
+            g.rounds
+                .iter()
+                .copied()
+                .reduce(Round::max_components)
+                .unwrap()
+                .power()
+        })
+        .sum()
 }
 
 #[derive(Debug, Clone)]
 struct Input {
+    games: Vec<Game>,
+}
+
+#[derive(Debug, Clone)]
+struct Game {
     id: usize,
-    rounds: Vec<Round>,
+    rounds: SmallVec<[Round; 6]>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Round {
-    red: usize,
-    green: usize,
-    blue: usize,
+    red: u8,
+    green: u8,
+    blue: u8,
 }
 
 impl Round {
@@ -73,25 +81,36 @@ impl Round {
         self.red <= 12 && self.green <= 13 && self.blue <= 14
     }
 
-    pub fn max_assign(&mut self, other: Self) {
-        self.red = self.red.max(other.red);
-        self.green = self.green.max(other.green);
-        self.blue = self.blue.max(other.blue);
+    pub fn max_components(self, other: Self) -> Self {
+        Self {
+            red: self.red.max(other.red),
+            green: self.green.max(other.green),
+            blue: self.blue.max(other.blue),
+        }
     }
 
     pub fn power(self) -> usize {
-        self.red * self.green * self.blue
+        (self.red as usize) * (self.green as usize) * (self.blue as usize)
     }
 }
 
+#[derive(Debug, Error)]
+enum ParseInputError {
+    #[error("Expected character: {0:?}")]
+    Expected(char),
+    #[error("Expected number: {0:?}")]
+    InvalidNumber(#[from] ParseIntError),
+}
+
 impl FromStr for Round {
-    type Err = ();
+    type Err = ParseInputError;
 
     fn from_str(piece: &str) -> Result<Self, Self::Err> {
         let mut res = Round::new();
         for cube in piece.split(", ") {
-            let (num_str, color_str) = cube.split_once(' ').expect("Space separator");
-            let num = num_str.parse::<usize>().expect("Integer");
+            let (num_str, color_str) =
+                cube.split_once(' ').ok_or(ParseInputError::Expected(' '))?;
+            let num = num_str.parse::<u8>()?;
             match color_str.as_bytes()[0] {
                 b'r' => res.red += num,
                 b'g' => res.green += num,
@@ -103,20 +122,34 @@ impl FromStr for Round {
     }
 }
 
-fn parse_input(text: &str) -> Vec<Input> {
-    let mut res: Vec<Input> = Vec::new();
-    for line in text.lines() {
-        let line = &line[5..]; //.strip_prefix("Game ").expect("game prefix");
-        let (id_str, line) = line.split_once(": ").expect("colon separator");
-        let id = id_str.parse::<usize>().expect("numeric game id");
-        let mut rounds = Vec::with_capacity(10);
+impl FromStr for Game {
+    type Err = ParseInputError;
+
+    fn from_str(line: &str) -> Result<Self, Self::Err> {
+        let line = &line[5..]; //.strip_prefix("Game ").ok_or(ParseInputError::Expected(...))?;
+        let (id_str, line) = line
+            .split_once(": ")
+            .ok_or(ParseInputError::Expected(':'))?;
+        let id = id_str.parse::<usize>()?;
+        let mut rounds = SmallVec::new();
         for round_str in line.split("; ") {
-            let round = round_str.parse().expect("round");
+            let round = round_str.parse()?;
             rounds.push(round);
         }
-        res.push(Input { id, rounds });
+        Ok(Game { id, rounds })
     }
-    res
+}
+
+impl FromStr for Input {
+    type Err = ParseInputError;
+
+    fn from_str(text: &str) -> Result<Input, Self::Err> {
+        let mut games: Vec<Game> = Vec::new();
+        for line in text.lines() {
+            games.push(line.parse()?);
+        }
+        Ok(Self { games })
+    }
 }
 
 #[cfg(test)]
@@ -126,21 +159,20 @@ mod tests {
     use super::*;
     use test::Bencher;
 
-
     #[bench]
     fn run_parse_input(b: &mut Bencher) {
-        b.iter(|| black_box(parse_input(INPUT)));
+        b.iter(|| black_box(INPUT.parse::<Input>()));
     }
 
     #[bench]
     fn run_part_1(b: &mut Bencher) {
-        let input = parse_input(INPUT);
+        let input = INPUT.parse().expect("Parse input");
         b.iter(|| black_box(part_1(&input)));
     }
 
     #[bench]
     fn run_part_2(b: &mut Bencher) {
-        let input = parse_input(INPUT);
+        let input = INPUT.parse().expect("Parse input");
         b.iter(|| black_box(part_2(&input)));
     }
 }
