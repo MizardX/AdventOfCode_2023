@@ -1,5 +1,9 @@
 #![warn(clippy::pedantic)]
 
+use smallvec::{smallvec, SmallVec};
+use std::collections::{HashMap, HashSet};
+use std::fmt::Debug;
+use std::ops::{BitAnd, Deref};
 use std::str::FromStr;
 use thiserror::Error;
 
@@ -12,85 +16,272 @@ pub fn run() {
     println!(".Day 23");
 
     println!("++Example");
-    let example = EXAMPLE.parse().expect("Parse example");
+    let example = Graph::from(&EXAMPLE.parse::<Map>().expect("Parse example"));
     println!("|+-Part 1: {} (expected 94)", part_1(&example));
     println!("|'-Part 2: {} (expected 154)", part_2(&example));
 
     println!("++Input");
-    let input = INPUT.parse().expect("Parse input");
+    let input = Graph::from(&INPUT.parse::<Map>().expect("Parse input"));
     println!("|+-Part 1: {} (expected 2402)", part_1(&input));
-    println!("|'-Part 2: {} (expected XXX)", part_2(&input));
+    println!("|'-Part 2: {} (expected 6450)", part_2(&input));
     println!("')");
 }
 
-fn part_1(map: &Map) -> usize {
-    dfs_longest(map, true)
+fn part_1(graph: &Graph) -> usize {
+    graph.longest_path(true)
 }
 
-fn part_2(map: &Map) -> usize {
-    dfs_longest(map, false)
+fn part_2(graph: &Graph) -> usize {
+    graph.longest_path(false)
 }
 
-#[allow(clippy::cast_possible_wrap)]
-fn dfs_longest(map: &Map, paths_one_way: bool) -> usize {
-    let start = Pos::new(0, 1);
-    let goal = Pos::new(
-        map.grid.height() as isize - 1,
-        map.grid.width() as isize - 2,
-    );
-    let mut visited = Grid::new(map.grid.width(), map.grid.height());
-    let mut max_dist = 0;
+#[derive(Debug)]
+struct Graph {
+    nodes: Vec<Node>,
+    start_ix: usize,
+    goal_ix: usize,
+}
 
-    let mut pending = Vec::with_capacity(map.grid.width() * map.grid.height());
-    pending.push((start, 0, true));
-    while let Some((pos, dist, entering)) = pending.pop() {
-        let Some(tile) = map.grid.get(pos) else {
-            continue;
-        };
-        if matches!(tile, Tile::Blocked) {
-            continue;
+impl Graph {
+    pub fn len(&self) -> usize {
+        self.nodes.len()
+    }
+
+    fn longest_path(&self, slopes_one_way: bool) -> usize {
+        let mut visited = vec![false; self.len()];
+        let mut max_dist = 0;
+
+        let mut pending = Vec::with_capacity(self.len());
+        pending.push((self.start_ix, 0, true));
+
+        while let Some((node_ix, dist, entering)) = pending.pop() {
+            if entering {
+                if node_ix == self.goal_ix {
+                    max_dist = max_dist.max(dist);
+                    continue;
+                }
+
+                if visited[node_ix] {
+                    continue;
+                }
+                visited[node_ix] = true;
+
+                pending.push((node_ix, dist, false)); // exiting
+
+                for &edge in &self.nodes[node_ix].neighbors {
+                    if visited[edge.dest_ix] {
+                        continue;
+                    }
+                    if slopes_one_way && !edge.direction.is_outgoing() {
+                        continue;
+                    }
+
+                    pending.push((edge.dest_ix, dist + edge.dist, true));
+                }
+
+            } else {
+                // exiting
+                debug_assert!(visited[node_ix], "Should never be unvisited when exiting");
+                visited[node_ix] = false;
+            }
         }
-        if entering {
-            if pos == goal {
-                max_dist = max_dist.max(dist);
-                continue;
-            }
-            match visited.get_mut(pos).unwrap() {
-                true => {
-                    continue;
-                }
-                vis => *vis = true,
-            };
-            pending.push((pos, dist, false)); // exiting
-            for step in [Dir::N, Dir::E, Dir::S, Dir::W] {
-                if paths_one_way && matches!(tile, Tile::Slope(d) if d != step) {
-                    continue;
-                }
-                let next = pos + step;
-                if matches!(map.grid.get(next), Some(Tile::Blocked)) {
-                    continue;
-                }
-                if matches!(visited.get(next), Some(true) | None) {
-                    continue;
-                }
-                pending.push((next, dist + 1, true));
-            }
-        } else {
-            // exiting
-            match visited.get_mut(pos).unwrap() {
-                false => unreachable!("Should never be unvisited when exiting"),
-                vis => *vis = false,
-            };
+        max_dist
+    }
+}
+
+impl From<&Map> for Graph {
+    fn from(map: &Map) -> Self {
+        let mut builder = GraphBuiler::new();
+        builder.parse_map(map);
+        builder.build()
+    }
+}
+
+#[derive(Debug)]
+struct GraphBuiler {
+    nodes: Vec<Node>,
+    node_lookup: HashMap<Pos, usize>,
+    start_ix: Option<usize>,
+    goal_ix: Option<usize>,
+}
+
+impl GraphBuiler {
+    pub fn new() -> Self {
+        Self {
+            nodes: Vec::new(),
+            node_lookup: HashMap::new(),
+            start_ix: None,
+            goal_ix: None,
         }
     }
-    max_dist
+
+    pub fn build(self) -> Graph {
+        Graph {
+            nodes: self.nodes,
+            start_ix: self.start_ix.unwrap(),
+            goal_ix: self.goal_ix.unwrap(),
+        }
+    }
+
+    fn add_node(&mut self, pos: Pos) -> usize {
+        let node = Node::new();
+        let ix = self.nodes.len();
+        self.nodes.push(node);
+        self.node_lookup.insert(pos, ix);
+        ix
+    }
+
+    fn connect(
+        &mut self,
+        source_node_ix: usize,
+        dest_node_ix: usize,
+        dist: usize,
+        edge_type: EdgeDirection,
+    ) {
+        self.nodes[source_node_ix].connect(dest_node_ix, dist, edge_type);
+        self.nodes[dest_node_ix].connect(source_node_ix, dist, edge_type.reverse());
+    }
+
+    fn parse_map(&mut self, map: &Map) {
+        let start_node_ix = self.add_node(map.start);
+        self.start_ix = Some(start_node_ix);
+
+        let mut visited = HashSet::new();
+
+        let mut pending = Vec::new();
+        pending.push((start_node_ix, map.start, Dir::S, 0, EdgeDirection::TwoWay));
+
+        while let Some((source_node_ix, pos, dir, dist, edge_type)) = pending.pop() {
+            let Some(tile) = map.grid.get(pos) else {
+                continue;
+            };
+            if matches!(tile, Tile::Blocked) {
+                continue;
+            }
+
+            if !visited.insert((source_node_ix, pos, dir)) {
+                continue;
+            }
+
+            if let Some(&existing_ix) = self.node_lookup.get(&pos) {
+                if pos != map.start {
+                    self.connect(source_node_ix, existing_ix, dist, edge_type);
+                    continue;
+                }
+            }
+
+            if pos == map.goal {
+                let goal_ix = self.add_node(pos);
+                self.goal_ix = Some(goal_ix);
+                self.connect(source_node_ix, goal_ix, dist, edge_type);
+                continue;
+            }
+
+            let neighbors = map.neighbors(pos);
+            let num_exists = neighbors
+                .iter()
+                .filter(|&&(d, _, _)| d != dir.reverse())
+                .count();
+            match num_exists {
+                0 => (),
+                1 => {
+                    for &(next_dir, next_pos, next_type) in neighbors.iter() {
+                        if next_dir == dir.reverse() {
+                            continue;
+                        }
+                        pending.push((
+                            source_node_ix,
+                            next_pos,
+                            next_dir,
+                            dist + 1,
+                            edge_type & next_type,
+                        ));
+                    }
+                }
+                _ => {
+                    // Intresection: Create new node
+                    let new_node_ix = self.add_node(pos);
+                    self.connect(source_node_ix, new_node_ix, dist, edge_type);
+                    for &(next_dir, next_pos, next_type) in neighbors.iter() {
+                        if next_dir == dir.reverse() {
+                            continue;
+                        }
+                        pending.push((new_node_ix, next_pos, next_dir, 1, next_type));
+                    }
+                }
+            }
+        }
+    }
 }
 
-#[derive(Debug, Clone, Copy)]
+
+#[derive(Clone, Default)]
+struct Node {
+    neighbors: SmallVec<[Edge; 4]>,
+}
+
+impl Node {
+    fn new() -> Self {
+        Self {
+            neighbors: SmallVec::new(),
+        }
+    }
+
+    fn connect(&mut self, other_ix: usize, dist: usize, edge_type: EdgeDirection) {
+        let edge = Edge::new(other_ix, dist, edge_type);
+        if !self.neighbors.contains(&edge) {
+            self.neighbors.push(edge);
+        }
+    }
+}
+
+impl Debug for Node {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Node").field(&self.neighbors).finish()
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct Edge {
+    dest_ix: usize,
+    dist: usize,
+    direction: EdgeDirection,
+}
+
+impl Edge {
+    fn new(dest_ix: usize, dist: usize, edge_type: EdgeDirection) -> Self {
+        Self {
+            dest_ix,
+            dist,
+            direction: edge_type,
+        }
+    }
+}
+
+impl Debug for Edge {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}: {}", self.dest_ix, self.dist)
+    }
+}
+
+#[derive(Clone, Copy)]
 enum Tile {
     Open,
     Blocked,
     Slope(Dir),
+}
+
+impl Debug for Tile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Open => write!(f, "."),
+            Self::Blocked => write!(f, "#"),
+            Self::Slope(Dir::N) => write!(f, "^"),
+            Self::Slope(Dir::E) => write!(f, ">"),
+            Self::Slope(Dir::S) => write!(f, "v"),
+            Self::Slope(Dir::W) => write!(f, "<"),
+        }
+    }
 }
 
 impl TryFrom<u8> for Tile {
@@ -112,15 +303,102 @@ impl TryFrom<u8> for Tile {
 #[derive(Debug, Clone)]
 struct Map {
     grid: Grid<Tile>,
+    start: Pos,
+    goal: Pos,
+}
+
+impl Map {
+    pub fn neighbors(&self, pos: Pos) -> impl Deref<Target = [(Dir, Pos, EdgeDirection)]> {
+        match self.grid.get(pos) {
+            // Current is not a valid tile
+            None | Some(Tile::Blocked) => smallvec![],
+            Some(tile) => {
+                let mut neighbors: SmallVec<[_; 4]> = SmallVec::new();
+                for next_dir in [Dir::N, Dir::E, Dir::S, Dir::W] {
+                    let next_pos = pos + next_dir;
+                    let cur_along = match tile {
+                        // Current is slope in current direction
+                        Tile::Slope(dir) => Some(dir == next_dir),
+                        _ => None,
+                    };
+
+                    let next_against = match self.grid.get(next_pos) {
+                        // Neighbor is not a valid tile
+                        None | Some(Tile::Blocked) => continue,
+                        // Neighbor is slope pointing back to here
+                        Some(Tile::Slope(dir)) => Some(dir == next_dir.reverse()),
+                        // Path or slope in other direction
+                        _ => None,
+                    };
+                    let edge_type = match (cur_along, next_against) {
+                        // Neither is a slope. ..
+                        (None, None) => EdgeDirection::TwoWay,
+                        // Current is a slope along, and neighbor is not a slope against. >., .> or >>
+                        (None | Some(true), None | Some(false)) => EdgeDirection::Outgoing,
+                        // Neighbor is a slope against, and current is not a slope along. <., .< or <<
+                        (None | Some(false), None | Some(true)) => EdgeDirection::Incoming,
+                        // Current and neighbor is either against, of away from, eachother. >< or <>
+                        _ => EdgeDirection::Untraversible,
+                    };
+                    neighbors.push((next_dir, next_pos, edge_type));
+                }
+                neighbors
+            }
+        }
+    }
 }
 
 impl FromStr for Map {
     type Err = ParseInputError;
 
+    #[allow(clippy::cast_possible_wrap)]
     fn from_str(text: &str) -> Result<Self, Self::Err> {
-        Ok(Self {
-            grid: text.parse()?,
-        })
+        let grid: Grid<Tile> = text.parse()?;
+        let start = Pos::new(0, 1);
+        let goal = Pos::new(grid.height() as isize - 1, grid.width() as isize - 2);
+        Ok(Self { grid, start, goal })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EdgeDirection {
+    Untraversible = 0b00,
+    Incoming = 0b01,
+    Outgoing = 0b10,
+    TwoWay = 0b11,
+}
+
+impl EdgeDirection {
+    #[must_use]
+    fn is_incoming(self) -> bool {
+        matches!(self, Self::Incoming | Self::TwoWay)
+    }
+    #[must_use]
+    fn is_outgoing(self) -> bool {
+        matches!(self, Self::Outgoing | Self::TwoWay)
+    }
+
+    fn reverse(self) -> Self {
+        match self {
+            Self::Incoming => Self::Outgoing,
+            Self::Outgoing => Self::Incoming,
+            e => e,
+        }
+    }
+}
+
+impl BitAnd for EdgeDirection {
+    type Output = Self;
+
+    fn bitand(self, other: Self) -> Self::Output {
+        let incoming = self.is_incoming() && other.is_incoming();
+        let outgoing = self.is_outgoing() && other.is_outgoing();
+        match (incoming, outgoing) {
+            (false, false) => Self::Untraversible,
+            (false, true) => Self::Outgoing,
+            (true, false) => Self::Incoming,
+            (true, true) => Self::TwoWay,
+        }
     }
 }
 
@@ -146,19 +424,25 @@ mod tests {
     use test::Bencher;
 
     #[bench]
-    fn run_parse_input(b: &mut Bencher) {
-        b.iter(|| black_box(INPUT.parse::<Map>().expect("Parse input")));
+    fn run_a_parse_input(b: &mut Bencher) {
+        b.iter(|| black_box(Graph::from(&INPUT.parse::<Map>().expect("Parse input"))));
     }
 
     #[bench]
-    fn run_part_1(b: &mut Bencher) {
-        let input = INPUT.parse().expect("Parse input");
+    fn run_b_transform_input(b: &mut Bencher) {
+        let map = INPUT.parse::<Map>().expect("Parse input");
+        b.iter(|| black_box(Graph::from(&map)));
+    }
+
+    #[bench]
+    fn run_c_part_1(b: &mut Bencher) {
+        let input = Graph::from(&INPUT.parse::<Map>().expect("Parse input"));
         b.iter(|| black_box(part_1(&input)));
     }
 
     #[bench]
-    fn run_part_2(b: &mut Bencher) {
-        let input = INPUT.parse().expect("Parse input");
+    fn run_d_part_2(b: &mut Bencher) {
+        let input = Graph::from(&INPUT.parse::<Map>().expect("Parse input"));
         b.iter(|| black_box(part_2(&input)));
     }
 }
