@@ -48,41 +48,31 @@ impl Graph {
     }
 
     fn longest_path(&self, slopes_one_way: bool) -> usize {
-        let mut visited = vec![false; self.len()];
         let mut max_dist = 0;
 
         let mut pending = Vec::with_capacity(self.len());
-        pending.push((self.start_ix, 0, true));
+        pending.push((self.start_ix, 0, 0_u64));
 
-        while let Some((node_ix, dist, entering)) = pending.pop() {
-            if entering {
-                if node_ix == self.goal_ix {
-                    max_dist = max_dist.max(dist);
+        while let Some((node_ix, dist, visited)) = pending.pop() {
+            if node_ix == self.goal_ix {
+                max_dist = max_dist.max(dist);
+                continue;
+            }
+
+            let node_bit = 1_u64 << node_ix;
+            if (visited & node_bit) != 0 {
+                continue;
+            }
+
+            for &edge in &self.nodes[node_ix].neighbors {
+                if (visited & (1_u64 << edge.dest_ix)) != 0 {
+                    continue;
+                }
+                if slopes_one_way && !edge.direction.is_outgoing() {
                     continue;
                 }
 
-                if visited[node_ix] {
-                    continue;
-                }
-                visited[node_ix] = true;
-
-                pending.push((node_ix, dist, false)); // exiting
-
-                for &edge in &self.nodes[node_ix].neighbors {
-                    if visited[edge.dest_ix] {
-                        continue;
-                    }
-                    if slopes_one_way && !edge.direction.is_outgoing() {
-                        continue;
-                    }
-
-                    pending.push((edge.dest_ix, dist + edge.dist, true));
-                }
-
-            } else {
-                // exiting
-                debug_assert!(visited[node_ix], "Should never be unvisited when exiting");
-                visited[node_ix] = false;
+                pending.push((edge.dest_ix, dist + edge.dist, visited | node_bit));
             }
         }
         max_dist
@@ -213,7 +203,6 @@ impl GraphBuiler {
         }
     }
 }
-
 
 #[derive(Clone, Default)]
 struct Node {
