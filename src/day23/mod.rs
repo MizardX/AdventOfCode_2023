@@ -28,11 +28,11 @@ pub fn run() {
 }
 
 fn part_1(graph: &Graph) -> usize {
-    graph.longest_path(true)
+    graph.longest_path::<true>()
 }
 
 fn part_2(graph: &Graph) -> usize {
-    graph.longest_path(false)
+    graph.longest_path::<false>()
 }
 
 #[derive(Debug)]
@@ -47,7 +47,7 @@ impl Graph {
         self.nodes.len()
     }
 
-    fn longest_path(&self, slopes_one_way: bool) -> usize {
+    fn longest_path<const SLOPES_ONE_WAY: bool>(&self) -> usize {
         let mut max_dist = 0;
 
         let mut pending = Vec::with_capacity(self.len());
@@ -68,7 +68,7 @@ impl Graph {
                 if (visited & (1_u64 << edge.dest_ix)) != 0 {
                     continue;
                 }
-                if slopes_one_way && !edge.direction.is_outgoing() {
+                if SLOPES_ONE_WAY && !edge.direction.is_outgoing() {
                     continue;
                 }
 
