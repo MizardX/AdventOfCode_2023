@@ -1,7 +1,9 @@
 #![warn(clippy::pedantic)]
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ops::{Add, Sub};
+
+use smallvec::SmallVec;
 
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
@@ -22,63 +24,70 @@ pub fn run() {
 }
 
 fn part_1(input: &Input) -> usize {
-    let mut symbol_lookup = HashMap::with_capacity(input.symbols.len());
-    for sym in &input.symbols {
-        symbol_lookup.insert(sym.pos, sym.name);
+    let mut sum: usize = 0;
+    let mut symbol_lookups = [(); 3].map(|()| BTreeSet::new());
+    for sym in &input.symbols[0] {
+        symbol_lookups[2].insert(sym.pos.col);
     }
-    let mut sum = 0;
-    for lbl in &input.labels {
-        let mut found = symbol_lookup.contains_key(&(lbl.pos - (0, 1)))
-            || symbol_lookup.contains_key(&(lbl.pos + (0, lbl.len)));
-        if !found {
-            for c in -1..=lbl.len {
-                if symbol_lookup.contains_key(&(lbl.pos + (-1, c)))
-                    || symbol_lookup.contains_key(&(lbl.pos + (1, c)))
-                {
-                    found = true;
-                    break;
-                }
+    for (r, lblrow) in input.labels.iter().enumerate() {
+        symbol_lookups.rotate_left(1);
+        symbol_lookups[2].clear();
+        if r + 1 < input.symbols.len() {
+            for sym in &input.symbols[r + 1] {
+                symbol_lookups[2].insert(sym.pos.col);
             }
         }
-        if found {
-            sum += lbl.name as usize;
+        for lbl in lblrow {
+            let rng = (lbl.pos.col - 1)..=(lbl.pos.col + lbl.len);
+            let mut count = 0;
+            for l in &symbol_lookups {
+                let matched = l.range(rng.clone()).collect::<SmallVec<[_; 3]>>();
+                count += matched.len();
+            }
+            if count > 0 {
+                sum += lbl.name as usize;
+            }
         }
     }
+
     sum
 }
 
-fn part_2(input: &Input) -> u64 {
-    let mut gears: HashMap<Point, Vec<u16>> = input
-        .symbols
-        .iter()
-        .filter_map(|s| {
-            if s.name == b'*' {
-                Some((s.pos, vec![]))
-            } else {
-                None
-            }
-        })
-        .collect();
-    for lbl in &input.labels {
-        if let Some(gear) = gears.get_mut(&(lbl.pos - (0, 1))) {
-            gear.push(lbl.name);
-        }
-        if let Some(gear) = gears.get_mut(&(lbl.pos + (0, lbl.len))) {
-            gear.push(lbl.name);
-        }
-        for c in -1..=lbl.len {
-            if let Some(gear) = gears.get_mut(&(lbl.pos + (-1, c))) {
-                gear.push(lbl.name);
-            }
-            if let Some(gear) = gears.get_mut(&(lbl.pos + (1, c))) {
-                gear.push(lbl.name);
-            }
-        }
+fn part_2(input: &Input) -> usize {
+    let mut sum: usize = 0;
+    let mut num_lookups = [(); 3].map(|()| BTreeMap::new());
+    for lbl in &input.labels[0] {
+        num_lookups[2].insert(lbl.pos.col, lbl);
     }
-    let mut sum = 0;
-    for gear in gears.values() {
-        if gear.len() == 2 {
-            sum += u64::from(gear[0]) * u64::from(gear[1]);
+    for r in 0..input.labels.len() {
+        num_lookups.rotate_left(1);
+        num_lookups[2].clear();
+        if r + 1 < input.labels.len() {
+            for lbl in &input.labels[r + 1] {
+                num_lookups[2].insert(lbl.pos.col, lbl);
+            }
+        }
+        'symbol: for sym in &input.symbols[r] {
+            if sym.name != b'*' {
+                continue;
+            }
+            let rng = (sym.pos.col - 3)..(sym.pos.col + 2);
+            let mut prod = 1;
+            let mut count = 0;
+            for lookup in &num_lookups {
+                for (&c, &lbl) in lookup.range(rng.clone()) {
+                    if c + lbl.len >= sym.pos.col {
+                        if count >= 2 {
+                            continue 'symbol;
+                        }
+                        prod *= lbl.name as usize;
+                        count += 1;
+                    }
+                }
+            }
+            if count == 2 {
+                sum += prod;
+            }
         }
     }
     sum
@@ -117,14 +126,14 @@ impl Sub<(i16, i16)> for Point {
 
 #[derive(Debug, Clone, Default)]
 struct Input {
-    symbols: Vec<Symbol>,
-    labels: Vec<Label>,
+    symbols: Vec<SmallVec<[Symbol; 9]>>,
+    labels: Vec<SmallVec<[Label; 16]>>,
 }
 impl Input {
     fn new() -> Self {
         Self {
-            symbols: Vec::with_capacity(800),
-            labels: Vec::with_capacity(1500),
+            symbols: Vec::with_capacity(140),
+            labels: Vec::with_capacity(140),
         }
     }
 }
@@ -142,10 +151,13 @@ struct Symbol {
     name: u8,
 }
 
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
 fn parse_input(text: &str) -> Input {
     let mut res: Input = Input::new();
     for (r, line) in text.lines().enumerate() {
-        let r = i16::try_from(r).expect("row < 2^15");
+        res.labels.push(SmallVec::new());
+        res.symbols.push(SmallVec::new());
         let mut number: Option<Label> = None;
         for (c, ch) in line.bytes().enumerate() {
             let c = i16::try_from(c).expect("col < 2^15");
@@ -161,23 +173,22 @@ fn parse_input(text: &str) -> Input {
                     });
                 }
             } else if let Some(num) = number {
-                res.labels.push(num);
+                res.labels[r].push(num);
                 number = None;
             }
             if !ch.is_ascii_digit() && ch != b'.' {
-                res.symbols.push(Symbol {
+                res.symbols[r].push(Symbol {
                     pos: Point::new(r as _, c as _),
                     name: ch,
                 });
             }
         }
         if let Some(num) = number {
-            res.labels.push(num);
+            res.labels[r].push(num);
         }
     }
     res
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -185,7 +196,6 @@ mod tests {
 
     use super::*;
     use test::Bencher;
-
 
     #[bench]
     fn run_parse_input(b: &mut Bencher) {
