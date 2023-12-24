@@ -2,8 +2,8 @@
 #![allow(dead_code)]
 
 use std::fmt::Debug;
-use std::num::ParseIntError;
-use std::ops::{Add, Index, IndexMut, Mul};
+use std::num::{ParseFloatError, ParseIntError};
+use std::ops::{Add, Index, IndexMut, Mul, Sub};
 use std::str::FromStr;
 
 use num_traits::{Num, PrimInt};
@@ -410,6 +410,8 @@ pub enum CommonParseError {
     ExpectedChar(char),
     #[error("Invalid integer: {0:?}")]
     InvalidInteger(#[from] ParseIntError),
+    #[error("Invalid integer: {0:?}")]
+    InvalidFloat(#[from] ParseFloatError),
 }
 
 #[derive(Copy, Clone)]
@@ -472,9 +474,54 @@ where
         let (y_str, z_str) = rest
             .split_once(',')
             .ok_or(CommonParseError::ExpectedChar(','))?;
-        let x = x_str.parse()?;
-        let y = y_str.parse()?;
-        let z = z_str.parse()?;
+        let x = x_str.trim().parse()?;
+        let y = y_str.trim().parse()?;
+        let z = z_str.trim().parse()?;
         Ok(Self::new(x, y, z))
+    }
+}
+
+impl<T> Add for Coordinate<T>
+where
+    T: Add<T, Output = T>,
+{
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self {
+            x: self.x + rhs.x,
+            y: self.y + rhs.y,
+            z: self.z + rhs.z,
+        }
+    }
+}
+
+impl<T> Sub for Coordinate<T>
+where
+    T: Sub<T, Output = T>,
+{
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self {
+            x: self.x - rhs.x,
+            y: self.y - rhs.y,
+            z: self.z - rhs.z,
+        }
+    }
+}
+
+impl<T> Mul<T> for Coordinate<T>
+where
+    T: Mul<T, Output = T> + Copy,
+{
+    type Output = Self;
+
+    fn mul(self, rhs: T) -> Self::Output {
+        Self {
+            x: self.x * rhs,
+            y: self.y * rhs,
+            z: self.z * rhs,
+        }
     }
 }
