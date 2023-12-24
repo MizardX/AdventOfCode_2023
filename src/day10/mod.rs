@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use thiserror::Error;
 
-use crate::aoclib::{CommonErrors, Dir, Grid, Pos};
+use crate::aoclib::{Dir, Grid, Pos, CommonParseError};
 
 const EXAMPLE1: &str = include_str!("example1.txt");
 const EXAMPLE2: &str = include_str!("example2.txt");
@@ -166,20 +166,14 @@ impl Input {
 
 #[derive(Debug, Error)]
 enum ParseError {
-    #[error("Input is empty")]
-    EmptyInput,
     #[error("Invalid symbol: {0}")]
     InvalidSymbol(char),
     #[error("Missing start")]
     MissingStart,
     #[error("Integer overflow: {0}")]
     Overflow(#[from] TryFromIntError),
-}
-
-impl CommonErrors for ParseError {
-    fn empty_input() -> Self {
-        Self::EmptyInput
-    }
+    #[error("{0:?}")]
+    CommonError(#[from] CommonParseError)
 }
 
 impl FromStr for Input {

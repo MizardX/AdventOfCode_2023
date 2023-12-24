@@ -5,7 +5,7 @@ use std::ops::{Index, IndexMut};
 use std::str::FromStr;
 use thiserror::Error;
 
-use crate::aoclib::{CommonErrors, Dir, Grid, Pos};
+use crate::aoclib::{Dir, Grid, Pos, CommonParseError};
 
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
@@ -157,16 +157,10 @@ impl<'a> MirrorMaze<'a> {
 
 #[derive(Debug, Error)]
 enum ParseInputError {
-    #[error("Input is empty")]
-    EmptyInput,
     #[error("Unexpected character: '{0}'")]
     InvalidChar(char),
-}
-
-impl CommonErrors for ParseInputError {
-    fn empty_input() -> Self {
-        Self::EmptyInput
-    }
+    #[error("{0:?}")]
+    CommonError(#[from] CommonParseError)
 }
 
 impl FromStr for Input {

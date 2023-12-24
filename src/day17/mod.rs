@@ -6,7 +6,7 @@ use std::hash::Hash;
 use std::str::FromStr;
 use thiserror::Error;
 
-use crate::aoclib::{CommonErrors, Dir, Grid, Pos};
+use crate::aoclib::{Dir, Grid, Pos, CommonParseError};
 
 const EXAMPLE1: &str = include_str!("example1.txt");
 const EXAMPLE2: &str = include_str!("example2.txt");
@@ -145,16 +145,10 @@ struct Input {
 
 #[derive(Debug, Error)]
 enum ParseInputError {
-    #[error("Input is empty")]
-    EmptyInput,
     #[error("Unexpected character: '{0}'")]
     InvalidChar(char),
-}
-
-impl CommonErrors for ParseInputError {
-    fn empty_input() -> Self {
-        Self::EmptyInput
-    }
+    #[error("{0:?}")]
+    CommonError(#[from] CommonParseError)
 }
 
 impl FromStr for Input {

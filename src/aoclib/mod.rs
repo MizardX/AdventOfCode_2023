@@ -2,10 +2,12 @@
 #![allow(dead_code)]
 
 use std::fmt::Debug;
+use std::num::ParseIntError;
 use std::ops::{Add, Index, IndexMut, Mul};
 use std::str::FromStr;
 
 use num_traits::{Num, PrimInt};
+use thiserror::Error;
 
 /// Grid position
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -328,13 +330,14 @@ where
 impl<T> FromStr for Grid<T>
 where
     T: TryFrom<u8>,
-    <T as TryFrom<u8>>::Error: CommonErrors,
+    CommonParseError: Into<<T as TryFrom<u8>>::Error>,
+    // reverse of <T as TryFrom<u8>>::Error: From<CommonParseError> -- But the type checker didn't like this
 {
     type Err = <T as TryFrom<u8>>::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut lines = s.lines().enumerate();
-        let first = lines.next().ok_or(Self::Err::empty_input())?.1;
+        let first = lines.next().ok_or(CommonParseError::EmptyInput.into())?.1;
         let width = first.len();
         let mut height = 1;
         let mut values = Vec::with_capacity(width * width);
@@ -353,10 +356,6 @@ where
             values,
         })
     }
-}
-
-pub trait CommonErrors {
-    fn empty_input() -> Self;
 }
 
 pub struct RepeatingGrid<'a, T>(&'a Grid<T>);
@@ -401,4 +400,14 @@ where
     T: Copy + Num,
 {
     a * b / gcd(a, b)
+}
+
+#[derive(Debug, Error)]
+pub enum CommonParseError {
+    #[error("Input is empty")]
+    EmptyInput,
+    #[error("Expected char: {0:?}")]
+    ExpectedChar(char),
+    #[error("Invalid integer: {0:?}")]
+    InvalidInteger(#[from] ParseIntError),
 }
