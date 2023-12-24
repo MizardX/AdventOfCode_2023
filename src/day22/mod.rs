@@ -6,7 +6,9 @@ use std::num::ParseIntError;
 use std::str::FromStr;
 use thiserror::Error;
 
-use crate::aoclib::{Grid, Pos};
+use crate::aoclib::{Grid, Pos, CommonParseError};
+
+type Coordinate = crate::aoclib::Coordinate<u16>;
 
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
@@ -182,61 +184,6 @@ impl<'a> Simulator<'a> {
     }
 }
 
-#[derive(Copy, Clone)]
-struct Coordinate {
-    pub x: u16,
-    pub y: u16,
-    pub z: u16,
-}
-
-impl Coordinate {
-    fn new(x: u16, y: u16, z: u16) -> Self {
-        Self { x, y, z }
-    }
-
-    pub fn min_fields(self, other: Self) -> Self {
-        Self {
-            x: self.x.min(other.x),
-            y: self.y.min(other.y),
-            z: self.z.min(other.z),
-        }
-    }
-    pub fn max_fields(self, other: Self) -> Self {
-        Self {
-            x: self.x.max(other.x),
-            y: self.y.max(other.y),
-            z: self.z.max(other.z),
-        }
-    }
-}
-
-impl Debug for Coordinate {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("")
-            .field(&self.x)
-            .field(&self.y)
-            .field(&self.z)
-            .finish()
-    }
-}
-
-impl FromStr for Coordinate {
-    type Err = ParseInputError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (x_str, rest) = s
-            .split_once(',')
-            .ok_or(ParseInputError::ExpectedChar(','))?;
-        let (y_str, z_str) = rest
-            .split_once(',')
-            .ok_or(ParseInputError::ExpectedChar(','))?;
-        let x = x_str.parse()?;
-        let y = y_str.parse()?;
-        let z = z_str.parse()?;
-        Ok(Self::new(x, y, z))
-    }
-}
-
 #[derive(Clone)]
 struct Piece {
     pub low: Coordinate,
@@ -311,6 +258,8 @@ enum ParseInputError {
     ExpectedChar(char),
     #[error("Not an integer: {0:?}")]
     Integer(#[from] ParseIntError),
+    #[error("{0:?}")]
+    CommonError(#[from] CommonParseError)
 }
 
 #[cfg(test)]

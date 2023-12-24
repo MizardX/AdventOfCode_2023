@@ -411,3 +411,70 @@ pub enum CommonParseError {
     #[error("Invalid integer: {0:?}")]
     InvalidInteger(#[from] ParseIntError),
 }
+
+#[derive(Copy, Clone)]
+pub struct Coordinate<T> {
+    pub x: T,
+    pub y: T,
+    pub z: T,
+}
+
+impl<T> Coordinate<T> {
+    pub fn new(x: T, y: T, z: T) -> Self {
+        Self { x, y, z }
+    }
+}
+
+impl<T> Coordinate<T>
+where
+    T: Ord,
+{
+    pub fn min_fields(self, other: Self) -> Self {
+        Self {
+            x: self.x.min(other.x),
+            y: self.y.min(other.y),
+            z: self.z.min(other.z),
+        }
+    }
+    pub fn max_fields(self, other: Self) -> Self {
+        Self {
+            x: self.x.max(other.x),
+            y: self.y.max(other.y),
+            z: self.z.max(other.z),
+        }
+    }
+}
+
+impl<T> Debug for Coordinate<T>
+where
+    T: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("")
+            .field(&self.x)
+            .field(&self.y)
+            .field(&self.z)
+            .finish()
+    }
+}
+
+impl<T> FromStr for Coordinate<T>
+where
+    T: FromStr,
+    CommonParseError: From<T::Err>,
+{
+    type Err = CommonParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (x_str, rest) = s
+            .split_once(',')
+            .ok_or(CommonParseError::ExpectedChar(','))?;
+        let (y_str, z_str) = rest
+            .split_once(',')
+            .ok_or(CommonParseError::ExpectedChar(','))?;
+        let x = x_str.parse()?;
+        let y = y_str.parse()?;
+        let z = z_str.parse()?;
+        Ok(Self::new(x, y, z))
+    }
+}
