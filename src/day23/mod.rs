@@ -7,7 +7,7 @@ use std::ops::{BitAnd, Deref};
 use std::str::FromStr;
 use thiserror::Error;
 
-use crate::aoclib::{Dir, Grid, Pos, CommonParseError};
+use crate::aoclib::{CommonParseError, Dir, Grid, Pos};
 
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
@@ -28,6 +28,7 @@ pub fn run() {
 }
 
 fn part_1(graph: &Graph) -> usize {
+    println!("{graph:?}");
     graph.longest_path::<true>()
 }
 
@@ -35,7 +36,6 @@ fn part_2(graph: &Graph) -> usize {
     graph.longest_path::<false>()
 }
 
-#[derive(Debug)]
 struct Graph {
     nodes: Vec<Node>,
     start_ix: usize,
@@ -84,6 +84,34 @@ impl From<&Map> for Graph {
         let mut builder = GraphBuiler::new();
         builder.parse_map(map);
         builder.build()
+    }
+}
+
+impl Debug for Graph {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "digraph G {{")?;
+        for (i, node) in self.nodes.iter().enumerate() {
+            write!(f, "n{i}; ")?;
+            for e in &node.neighbors {
+                if e.dest_ix < i {
+                    continue;
+                }
+                write!(
+                    f,
+                    "n{i} -> n{} [ dir={} label=\"{}\" ]; ",
+                    e.dest_ix,
+                    match e.direction {
+                        EdgeDirection::Untraversible => "none",
+                        EdgeDirection::Incoming => "back",
+                        EdgeDirection::Outgoing => "forward",
+                        EdgeDirection::TwoWay => "both",
+                    },
+                    e.dist
+                )?;
+            }
+            writeln!(f)?;
+        }
+        writeln!(f, "}}")
     }
 }
 
@@ -396,7 +424,7 @@ enum ParseInputError {
     #[error("Unexpected character: '{0}'")]
     InvalidChar(char),
     #[error("{0:?}")]
-    CommonError(#[from] CommonParseError)
+    CommonError(#[from] CommonParseError),
 }
 
 #[cfg(test)]
