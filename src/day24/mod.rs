@@ -16,15 +16,18 @@ pub fn run() {
     println!("++Example");
     let example = EXAMPLE.parse().expect("Parse example");
     println!("|+-Part 1: {} (expected 2)", part_1(&example, 7.0..=27.0));
-    println!("|'-Part 2: {} (expected XXX)", part_2(&example));
+    println!("|'-Part 2: {} (expected 47)", part_2(&example));
 
     println!("++Input");
     let input = INPUT.parse().expect("Parse input");
     println!(
-        "|+-Part 1: {} (expected XXX)",
-        part_1(&input, 2.0e14..=4.0e14)
+        "|+-Part 1: {} (expected 31_921)",
+        part_1(&input, 2e14..=4e14)
     );
-    println!("|'-Part 2: {} (expected XXX)", part_2(&input));
+    println!(
+        "|'-Part 2: {} (expected 761_691_907_059_631)",
+        part_2(&input)
+    );
     println!("')");
 }
 
@@ -48,36 +51,64 @@ struct Intersection2d {
     y: f64,
 }
 
+#[allow(clippy::cast_precision_loss)]
 fn intersection_2d(hail1: &Hail, hail2: &Hail) -> Option<Intersection2d> {
     let denomenator = hail1.velocity.x * hail2.velocity.y - hail2.velocity.x * hail1.velocity.y;
-    if denomenator.abs() < 1e-3 {
+    if denomenator == 0 {
         return None;
     }
     let numerator1 = (hail1.position.y - hail2.position.y) * hail2.velocity.x
         + (hail2.position.x - hail1.position.x) * hail2.velocity.y;
-    let time1 = numerator1 / denomenator;
-    if time1.is_sign_negative() {
+    if numerator1.is_negative() ^ denomenator.is_negative() {
         return None;
     }
     let numerator2 = (hail1.position.y - hail2.position.y) * hail1.velocity.x
         + (hail2.position.x - hail1.position.x) * hail1.velocity.y;
-    let time2 = numerator2 / denomenator;
-    if time2.is_sign_negative() {
+    if numerator2.is_negative() ^ denomenator.is_negative() {
         return None;
     }
-    let x = hail1.position.x + time1 * hail1.velocity.x;
-    let y = hail1.position.y + time1 * hail1.velocity.y;
+    let x = hail1.position.x as f64
+        + ((numerator1 as f64 * hail1.velocity.x as f64) / denomenator as f64);
+    let y = hail1.position.y as f64
+        + ((numerator1 as f64 * hail1.velocity.y as f64) / denomenator as f64);
     Some(Intersection2d { x, y })
 }
 
-fn part_2(_input: &Input) -> usize {
-    0
+fn part_2(input: &Input) -> i128 {
+    let p1 = &input.hails[0].position;
+    let v1 = &input.hails[0].velocity;
+    let p2 = &input.hails[1].position;
+    let v2 = &input.hails[1].velocity;
+    let p3 = &input.hails[2].position;
+    let v3 = &input.hails[2].velocity;
+    let num1 = (p1.x * (p2.y - p3.y) + p2.x * (p3.y - p1.y) + p3.x * (p1.y - p2.y)) * (v2.z - v3.z)
+        + (p2.x * (p1.z - p3.z) + p1.x * (-p2.z + p3.z) + p3.x * (p2.z - p1.z)) * (v2.y - v3.y)
+        + (p1.y * (p2.z - p3.z) + p2.y * (-p1.z + p3.z) + p3.y * (p1.z - p2.z)) * (v2.x - v3.x);
+    let denom1 = (v1.y * (v2.z - v3.z) + v2.y * (-v1.z + v3.z) + v3.y * (v1.z - v2.z))
+        * (p2.x - p3.x)
+        + ((v2.x - v3.x) * v1.z + (-v1.x + v3.x) * v2.z + (v1.x - v2.x) * v3.z) * (p2.y - p3.y)
+        + (v1.x * (v2.y - v3.y) + v2.x * (-v1.y + v3.y) + v3.x * (v1.y - v2.y)) * (p2.z - p3.z);
+    let num2 = (p1.y * (p2.z - p3.z) + p2.y * (-p1.z + p3.z) + p3.y * (p1.z - p2.z))
+        * (v1.x - v3.x)
+        + ((p2.x - p3.x) * p1.z + (-p1.x + p3.x) * p2.z + (p1.x - p2.x) * p3.z) * (v1.y - v3.y)
+        + (p1.x * (p2.y - p3.y) + p2.x * (p3.y - p1.y) + p3.x * (p1.y - p2.y)) * (v1.z - v3.z);
+    let denom2 = (v1.y * (v2.z - v3.z) + v2.y * (-v1.z + v3.z) + v3.y * (v1.z - v2.z))
+        * (p1.x - p3.x)
+        + ((v2.x - v3.x) * v1.z + (-v1.x + v3.x) * v2.z + (v1.x - v2.x) * v3.z) * (p1.y - p3.y)
+        + (v1.x * (v2.y - v3.y) + v2.x * (-v1.y + v3.y) + v3.x * (v1.y - v2.y)) * (p1.z - p3.z);
+    let time1 = num1 / denom1;
+    let time2 = num2 / denom2;
+    let collission1 = *p1 + *v1 * time1;
+    let collission2 = *p2 + *v2 * time2;
+    let velocity = (collission2 - collission1) / (time2 - time1);
+    let position = collission1 - velocity * time1;
+    position.x + position.y + position.z
 }
 
 #[derive(Debug, Clone)]
 struct Hail {
-    position: Coordinate<f64>,
-    velocity: Coordinate<f64>,
+    position: Coordinate<i128>,
+    velocity: Coordinate<i128>,
 }
 
 impl FromStr for Hail {
@@ -140,7 +171,7 @@ mod tests {
     #[bench]
     fn run_part_1(b: &mut Bencher) {
         let input = INPUT.parse().expect("Parse input");
-        b.iter(|| black_box(part_1(&input, 2.0e14..=4.0e14)));
+        b.iter(|| black_box(part_1(&input, 2e14..=4e14)));
     }
 
     #[bench]

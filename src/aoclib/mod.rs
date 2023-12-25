@@ -3,7 +3,7 @@
 
 use std::fmt::Debug;
 use std::num::{ParseFloatError, ParseIntError};
-use std::ops::{Add, Index, IndexMut, Mul, Sub};
+use std::ops::{Add, Index, IndexMut, Mul, Sub, Div};
 use std::str::FromStr;
 
 use num_traits::{Num, PrimInt};
@@ -522,6 +522,21 @@ where
             x: self.x * rhs,
             y: self.y * rhs,
             z: self.z * rhs,
+        }
+    }
+}
+
+impl<T> Div<T> for Coordinate<T>
+where
+    T: Div<T, Output = T> + Copy,
+{
+    type Output = Self;
+
+    fn div(self, rhs: T) -> Self::Output {
+        Self {
+            x: self.x / rhs,
+            y: self.y / rhs,
+            z: self.z / rhs,
         }
     }
 }
