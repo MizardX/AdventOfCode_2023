@@ -51,25 +51,24 @@ fn part_2(input: &Input) -> usize {
 
 fn find_mirror_with_smudges<const N: u32>(masks: &[u32]) -> Option<usize> {
     let len = masks.len();
-    'outer: for (i, &[val1, val2]) in masks.array_windows::<2>().enumerate() {
-        let mut diffs = (val1 ^ val2).count_ones();
-        if diffs <= N {
-            // Potential horizontal mirror
-            for j1 in (2 * i + 2).saturating_sub(len)..i {
-                let j2 = 2 * i - j1 + 1;
-                diffs += (masks[j1] ^ masks[j2]).count_ones();
-                if diffs > N {
-                    continue 'outer;
-                }
+    'outer: for start_ix in 0..len - 1 {
+        let mut diffs = 0;
+        for dist in 0..=start_ix.min(len - start_ix - 2) {
+            let j1 = start_ix - dist;
+            let j2 = start_ix + dist + 1;
+            diffs += (masks[j1] ^ masks[j2]).count_ones();
+            if diffs > N {
+                continue 'outer;
             }
-            if diffs == N {
-                return Some(i + 1);
-            }
+        }
+        if diffs == N {
+            return Some(start_ix + 1);
         }
     }
     None
 }
 
+#[derive(Debug)]
 struct Pattern {
     row_masks: SmallVec<[u32; 20]>,
     col_masks: SmallVec<[u32; 20]>,
@@ -154,7 +153,7 @@ impl PatternParser {
 
     pub fn complete(&mut self) -> Pattern {
         let row_masks = std::mem::take(&mut self.row_masks);
-        let col_masks = std::mem::take(&mut self.row_masks);
+        let col_masks = std::mem::take(&mut self.col_masks);
         self.row = 0;
         Pattern {
             row_masks,
