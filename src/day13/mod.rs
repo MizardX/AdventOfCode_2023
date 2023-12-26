@@ -51,18 +51,16 @@ fn part_2(input: &Input) -> usize {
 
 fn find_mirror_with_smudges<const N: u32>(masks: &[u32]) -> Option<usize> {
     let len = masks.len();
-    'outer: for start_ix in 0..len - 1 {
+    'outer: for start_ix in 1..len {
         let mut diffs = 0;
-        for dist in 0..=start_ix.min(len - start_ix - 2) {
-            let j1 = start_ix - dist;
-            let j2 = start_ix + dist + 1;
-            diffs += (masks[j1] ^ masks[j2]).count_ones();
+        for (&above, &below) in masks[..start_ix].iter().rev().zip(&masks[start_ix..]) {
+            diffs += (above ^ below).count_ones();
             if diffs > N {
                 continue 'outer;
             }
         }
         if diffs == N {
-            return Some(start_ix + 1);
+            return Some(start_ix);
         }
     }
     None
