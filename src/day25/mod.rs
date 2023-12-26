@@ -1,7 +1,9 @@
 #![warn(clippy::pedantic)]
 
+use smallvec::SmallVec;
+use std::cmp::Reverse;
 use std::collections::hash_map::Entry;
-use std::collections::HashMap;
+use std::collections::{BinaryHeap, HashMap, VecDeque};
 use std::fmt::Debug;
 use thiserror::Error;
 
@@ -17,165 +19,171 @@ pub fn run() {
 
     println!("++Input");
     let input = INPUT.try_into().expect("Parse input");
-    println!("|+-Part 1: {} (expected 507 626)", part_1(&input));
+    println!("|+-Part 1: {} (expected 507626)", part_1(&input));
     println!("')");
 }
 
 fn part_1(input: &WiringDiagram) -> usize {
-    let num_nodes = input.names.len();
-    let mut uf = UnionFind::new(num_nodes);
-    let num_edges = input.edges.len();
-    let should_be_removed = |i: usize| {
-        ![input.edges[i].0, input.edges[i].1].into_iter().all(|j| {
-            matches!(
-                input.names[j],
-                "bbg" | "kbr" | "tdk" | "czs" | "vtt" | "fht"
-            )
-        })
-    };
-    for i in 0..num_edges - 2 {
-        if num_edges > 100 && should_be_removed(i) {
-            continue;
+    let n = input.components.len();
+    let mut heat = vec![0; n * n];
+    let mut visited = vec![false; n];
+    let mut queue = VecDeque::with_capacity(n);
+    for source in 0..n {
+        for v in &mut visited {
+            *v = false;
         }
-        for j in i + 1..num_edges - 1 {
-            if num_edges > 100 && should_be_removed(j) {
+        queue.push_back((source, source));
+        while let Some((came_from, node)) = queue.pop_front() {
+            if visited[node] {
                 continue;
             }
-            for k in j + 1..num_edges {
-                if num_edges > 100 && should_be_removed(k) {
+            visited[node] = true;
+            heat[came_from * n + node] += 1;
+            heat[came_from + node * n] += 1;
+
+            for &next in &input.components[node].edges {
+                if visited[next] {
                     continue;
                 }
-                uf.reset();
-                for (ix, (a, b)) in input.edges.iter().copied().enumerate() {
-                    if ix == i || ix == j || ix == k {
-                        continue;
-                    }
-                    uf.union(a, b);
-                }
-                if let Some((a, b)) = uf.get_two_components() {
-                    return a * b;
-                }
+                queue.push_back((node, next));
             }
         }
     }
-    0
-}
-
-struct UnionFind {
-    parent: Vec<usize>,
-    size: Vec<usize>,
-    num_components: usize,
-}
-
-impl UnionFind {
-    pub fn new(num_nodes: usize) -> Self {
-        let parent = (0..num_nodes).collect();
-        let size = vec![1; num_nodes];
-        Self {
-            parent,
-            size,
-            num_components: num_nodes,
+    let mut hottest = BinaryHeap::with_capacity(7);
+    for (i, h) in heat.into_iter().enumerate() {
+        hottest.push((Reverse(h), i / n, i % n));
+        if hottest.len() > 6 {
+            hottest.pop();
         }
     }
-
-    pub fn get_two_components(&self) -> Option<(usize, usize)> {
-        if self.num_components != 2 {
-            return None;
+    let mut critical: Vec<usize> = Vec::with_capacity(6);
+    while let Some((_, n1, n2)) = hottest.pop() {
+        if !critical.contains(&n1) {
+            critical.push(n1);
         }
-        let mut first = None;
-        let mut second = None;
-        for (i, (&parent, &size)) in self.parent.iter().zip(&self.size).enumerate() {
-            if parent == i {
-                if first.is_none() {
-                    first = Some(size);
-                } else if second.is_none() {
-                    second = Some(size);
-                } else {
-                    unreachable!()
-                }
+        if !critical.contains(&n2) {
+            critical.push(n2);
+        }
+    }
+    for v in &mut visited {
+        *v = false;
+    }
+    let mut num_visited = 0;
+    queue.push_back((0, 0));
+    while let Some((_, node)) = queue.pop_front() {
+        if visited[node] {
+            continue;
+        }
+        visited[node] = true;
+        num_visited += 1;
+        for &next in &input.components[node].edges {
+            if visited[next] {
+                continue;
             }
+            if critical.contains(&node) && critical.contains(&next) {
+                continue;
+            }
+            queue.push_back((next, next));
         }
-        Some((first?, second?))
     }
+    num_visited * (n - num_visited)
+}
 
-    pub fn reset(&mut self) {
-        for (i, x) in self.parent.iter_mut().enumerate() {
-            *x = i;
-        }
-        for x in &mut self.size {
-            *x = 1;
-        }
-        self.num_components = self.parent.len();
-    }
+#[derive(Clone)]
+struct Nodes<'a> {
+    name: &'a str,
+    edges: SmallVec<[usize; 9]>,
+}
 
-    pub fn find_parent(&mut self, mut ix: usize) -> usize {
-        let mut parent_ix = self.parent[ix];
-        while parent_ix != ix {
-            let parent_parent_ix = self.parent[parent_ix];
-            self.parent[ix] = parent_parent_ix;
-            ix = parent_ix;
-            parent_ix = parent_parent_ix;
-        }
-        ix
-    }
-
-    pub fn union(&mut self, mut x: usize, mut y: usize) -> bool {
-        x = self.find_parent(x);
-        y = self.find_parent(y);
-        if x == y {
-            return false;
-        }
-        if self.size[x] < self.size[y] {
-            std::mem::swap(&mut x, &mut y);
-        }
-        // self.size[x] >= self.size[y]
-        self.parent[y] = x;
-        self.size[x] += self.size[y];
-        self.num_components -= 1;
-        true
+impl<'a> Debug for Nodes<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("")
+            .field(&self.name)
+            .field(&self.edges)
+            .finish()
     }
 }
 
 #[derive(Debug, Clone)]
 struct WiringDiagram<'a> {
-    names: Vec<&'a str>,
-    edges: Vec<(usize, usize)>,
+    components: Vec<Nodes<'a>>,
 }
 
 impl<'a> TryFrom<&'a str> for WiringDiagram<'a> {
     type Error = ParseInputError;
 
     fn try_from(text: &'a str) -> Result<Self, Self::Error> {
-        let mut names = Vec::new();
+        let mut component_builders: Vec<ComponentBuilder<'a>> = Vec::new();
         let mut name_lookup = HashMap::new();
-        let mut edges = Vec::new();
         for line in text.lines() {
-            let (src_name, dst_names) = line
-                .split_once(": ")
-                .ok_or(ParseInputError::ExpectedChar(':'))?;
-            let src_index = match name_lookup.entry(src_name) {
-                Entry::Occupied(o) => *o.get(),
-                Entry::Vacant(v) => {
-                    let ix = names.len();
-                    names.push(src_name);
-                    v.insert(ix);
-                    ix
-                }
-            };
-            for dst_name in dst_names.split(' ') {
-                let dst_index = match name_lookup.entry(dst_name) {
+            let builder: ComponentBuilder<'a> = line.try_into()?;
+            let ix = component_builders.len();
+            name_lookup.insert(builder.name, ix);
+            component_builders.push(builder);
+        }
+        for ix in 0..component_builders.len() {
+            for j in 0..component_builders[ix].connected_to.len() {
+                let name = component_builders[ix].connected_to[j];
+                let ix2 = match name_lookup.entry(name) {
                     Entry::Occupied(o) => *o.get(),
                     Entry::Vacant(v) => {
-                        let ix = names.len();
-                        names.push(dst_name);
+                        let ix = component_builders.len();
+                        let cmp = ComponentBuilder::new(name, SmallVec::new());
+                        component_builders.push(cmp);
                         v.insert(ix);
                         ix
                     }
                 };
-                edges.push((src_index, dst_index));
+                component_builders[ix].connected_to_ixs.push(ix2);
+                component_builders[ix2].connected_from_ixs.push(ix);
             }
         }
-        Ok(Self { names, edges })
+        let components = component_builders.into_iter().map(|b| b.build()).collect();
+        Ok(Self { components })
+    }
+}
+
+#[derive(Clone)]
+struct ComponentBuilder<'a> {
+    name: &'a str,
+    connected_to: SmallVec<[&'a str; 6]>,
+    connected_to_ixs: SmallVec<[usize; 6]>,
+    connected_from_ixs: SmallVec<[usize; 6]>,
+}
+
+impl<'a> ComponentBuilder<'a> {
+    pub fn new(name: &'a str, connected_to: SmallVec<[&'a str; 6]>) -> Self {
+        Self {
+            name,
+            connected_to,
+            connected_to_ixs: SmallVec::new(),
+            connected_from_ixs: SmallVec::new(),
+        }
+    }
+
+    pub fn build(&self) -> Nodes<'a> {
+        let mut connected_to = SmallVec::new();
+        connected_to.extend_from_slice(&self.connected_to_ixs);
+        connected_to.extend_from_slice(&self.connected_from_ixs);
+        Nodes {
+            name: self.name,
+            edges: connected_to,
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a str> for ComponentBuilder<'a> {
+    type Error = ParseInputError;
+
+    fn try_from(line: &'a str) -> Result<Self, Self::Error> {
+        let (name, rest) = line
+            .split_once(": ")
+            .ok_or(ParseInputError::ExpectedChar(':'))?;
+        let mut connected_to = SmallVec::new();
+        for ref_name in rest.split(' ') {
+            connected_to.push(ref_name);
+        }
+        Ok(Self::new(name, connected_to))
     }
 }
 
