@@ -26,36 +26,66 @@ pub fn run() {
 fn part_1(input: &Input) -> usize {
     let mut sum = 0;
     for item in &input.steps {
-        sum += item.full_hash as usize;
+        sum += item.init_hash as usize;
     }
     sum
 }
 
 fn part_2(input: &Input) -> usize {
-    type Boxed = SmallVec<[(u8, u8); 8]>;
-    let mut boxes: SmallVec<[Boxed; 256]> = smallvec![smallvec![]; 256];
+    let mut lens_boxes: SmallVec<[LensBox; 256]> = smallvec![LensBox::default(); 256];
+
     for step in &input.steps {
+        let lens_box = &mut lens_boxes[step.box_hash as usize];
         match step.operation {
             Operation::Remove => {
-                boxes[step.box_hash as usize].retain(|a| a.0 != step.name_hash);
+                lens_box
+                    .lenses
+                    .retain(|lens| lens.name_hash != step.name_hash);
             }
-            Operation::Insert(lens) => {
-                let b = &mut boxes[step.box_hash as usize];
-                if let Some(s) = b.iter_mut().find(|a| a.0 == step.name_hash) {
-                    s.1 = lens;
+            Operation::Insert(focal_length) => {
+                if let Some(lens) = lens_box
+                    .lenses
+                    .iter_mut()
+                    .find(|a| a.name_hash == step.name_hash)
+                {
+                    lens.focal_length = focal_length;
                 } else {
-                    b.push((step.name_hash, lens));
+                    lens_box
+                        .lenses
+                        .push(Lens::new(step.name_hash, focal_length));
                 }
             }
         }
     }
-    let mut sum = 0;
-    for (i, b) in boxes.iter().enumerate() {
-        for (j, &(_, f)) in b.iter().enumerate() {
-            sum += (i + 1) * (j + 1) * (f as usize);
+
+    let mut total_focusing_power = 0;
+    for (box_index, lens_box) in lens_boxes.into_iter().enumerate() {
+        for (lens_index, lens) in lens_box.lenses.into_iter().enumerate() {
+            total_focusing_power +=
+                (box_index + 1) * (lens_index + 1) * (lens.focal_length as usize);
         }
     }
-    sum
+    total_focusing_power
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+struct Lens {
+    name_hash: u8,
+    focal_length: u8,
+}
+
+impl Lens {
+    fn new(name_hash: u8, focal_length: u8) -> Self {
+        Self {
+            name_hash,
+            focal_length,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+struct LensBox {
+    lenses: SmallVec<[Lens; 8]>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -66,7 +96,7 @@ enum Operation {
 
 #[derive(Debug, Clone)]
 struct Step {
-    full_hash: u8,
+    init_hash: u8,
     box_hash: u8,
     name_hash: u8,
     operation: Operation,
@@ -91,7 +121,7 @@ impl TryFrom<&[u8]> for Step {
             _ => return Err(ParseInputError::MissingOperation),
         };
         let step = Self {
-            full_hash: hash::<17>(b),
+            init_hash: hash::<17>(b),
             box_hash: hash::<17>(prefix),
             // with ::<6>, all names within the same box get different names
             // ::<2> also gives the correct answer, even though thre are collissions
