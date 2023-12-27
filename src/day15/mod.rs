@@ -1,6 +1,5 @@
 #![warn(clippy::pedantic)]
 
-use std::num::ParseIntError;
 use std::str::FromStr;
 
 use smallvec::{smallvec, SmallVec};
@@ -33,7 +32,7 @@ fn part_1(input: &Input) -> usize {
 }
 
 fn part_2(input: &Input) -> usize {
-    type Boxed = SmallVec<[(u16, u8); 8]>;
+    type Boxed = SmallVec<[(u8, u8); 8]>;
     let mut boxes: SmallVec<[Boxed; 256]> = smallvec![smallvec![]; 256];
     for step in &input.steps {
         match step.operation {
@@ -67,50 +66,39 @@ enum Operation {
 
 #[derive(Debug, Clone)]
 struct Step {
-    name_hash: u16,
     full_hash: u8,
     box_hash: u8,
+    name_hash: u8,
     operation: Operation,
 }
 
-impl FromStr for Step {
-    type Err = ParseInputError;
+#[allow(clippy::cast_lossless)]
+fn hash<const F: u8>(b: &[u8]) -> u8 {
+    let mut hash: u8 = 0;
+    for &ch in b {
+        hash = hash.wrapping_add(ch).wrapping_mul(F);
+    }
+    hash
+}
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let b = s.as_bytes();
-        let mut box_hash: u8 = 0;
-        let mut name_hash: u16 = 0;
-        let mut full_hash: u8 = box_hash;
-        let mut operation = None;
-        let mut it = b.iter().enumerate();
-        for (i, &ch) in &mut it {
-            full_hash = full_hash.wrapping_add(ch).wrapping_mul(17);
-            match ch {
-                b'=' => {
-                    operation = Some(Operation::Insert(s[i+1..].parse()?));
-                    break;
-                }
-                b'-' => {
-                    operation = Some(Operation::Remove);
-                    break;
-                }
-                _ => (),
-            }
-            box_hash = full_hash;
-            name_hash = name_hash.wrapping_add(u16::from(ch)).wrapping_mul(19); // 19 gives unique u16 values
-        }
-        let Some(operation) = operation else {
-            return Err(ParseInputError::MissingOperation);
+impl TryFrom<&[u8]> for Step {
+    type Error = ParseInputError;
+
+    fn try_from(b: &[u8]) -> Result<Self, Self::Error> {
+        let (prefix, operation) = match b {
+            [prefix @ .., b'-'] => (prefix, Operation::Remove),
+            [prefix @ .., b'=', digit] => (prefix, Operation::Insert(digit - b'0')),
+            _ => return Err(ParseInputError::MissingOperation),
         };
-        for (_, &ch) in it {
-            full_hash = full_hash.wrapping_add(ch).wrapping_mul(17);
-        }
-        Ok(Self {
-            name_hash,
-            full_hash,
-            box_hash,
+        let step = Self {
+            full_hash: hash::<17>(b),
+            box_hash: hash::<17>(prefix),
+            // with ::<6>, all names within the same box get different names
+            // ::<2> also gives the correct answer, even though thre are collissions
+            name_hash: hash::<6>(prefix),
             operation,
-        })
+        };
+        Ok(step)
     }
 }
 
@@ -127,12 +115,6 @@ impl Input {
 
 #[derive(Debug, Error)]
 enum ParseInputError {
-    // #[error("Input is empty")]
-    // EmptyInput,
-    // #[error("Unexpected character: '{0}'")]
-    // InvalidChar(char),
-    #[error("Invalid integer: {0}")]
-    InvalidInt(#[from] ParseIntError),
     #[error("Missing operation indicator")]
     MissingOperation,
 }
@@ -142,8 +124,8 @@ impl FromStr for Input {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut steps = Vec::new();
-        for description in s.split(',') {
-            steps.push(description.parse()?);
+        for description in s.as_bytes().split(|&ch| ch == b',') {
+            steps.push(description.try_into()?);
         }
         Ok(Self::new(steps))
     }
