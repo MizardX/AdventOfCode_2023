@@ -1,9 +1,6 @@
 #![warn(clippy::pedantic)]
 
-use std::collections::hash_map::{Entry, DefaultHasher};
-use std::collections::HashMap;
 use std::fmt::Display;
-use std::hash::{Hasher, Hash};
 use std::str::FromStr;
 use thiserror::Error;
 
@@ -31,20 +28,23 @@ fn part_1(input: &Input) -> usize {
     input.north_load()
 }
 
+const HASH_MODULO: usize = 2801;
+const HASH_FACTOR: usize = 19;
+
 fn part_2(input: &Input) -> usize {
     let mut input = input.clone();
-    let mut seen: HashMap<u64, usize> = HashMap::new();
+    let mut seen = [None; HASH_MODULO];
     let mut step = 0;
     let repeat = loop {
-        let hash = input.rock_hash();
-        match seen.entry(hash) {
-            Entry::Occupied(o) => break *o.get(),
-            Entry::Vacant(v) => v.insert(step),
-        };
-        input.tilt_cycle();
+        let hash = input.tilt_cycle();
         step += 1;
+        if let Some(repeat) = seen[hash] {
+            break repeat;
+        }
+        seen[hash] = Some(step);
     };
-    let remaining_cycles = (1_000_000_000 + step - 2 * repeat) % (step - repeat);
+    let cycle = step - repeat;
+    let remaining_cycles = (1_000_000_000 - step) % cycle;
     for _ in 0..remaining_cycles {
         input.tilt_cycle();
         step += 1;
@@ -95,12 +95,6 @@ impl Input {
         &self.tiles[ix..ix + self.width]
     }
 
-    fn rock_hash(&self) -> u64 {
-        let mut h = DefaultHasher::new();
-        self.tiles.hash(&mut h);
-        h.finish()
-    }
-
     fn north_load(&self) -> usize {
         let mut sum = 0;
         for r in 0..self.height {
@@ -113,11 +107,11 @@ impl Input {
         sum
     }
 
-    fn tilt_cycle(&mut self) {
+    fn tilt_cycle(&mut self) -> usize {
         self.tilt_north();
         self.tilt_west();
         self.tilt_south();
-        self.tilt_east();
+        self.tilt_east()
     }
 
     fn tilt_north(&mut self) {
@@ -171,7 +165,8 @@ impl Input {
         }
     }
 
-    fn tilt_east(&mut self) {
+    fn tilt_east(&mut self) -> usize {
+        let mut hash = 0;
         for r in 0..self.height {
             let mut col_pos = self.width - 1;
             for c in (0..self.width).rev() {
@@ -181,11 +176,13 @@ impl Input {
                     Tile::Rock => {
                         *self.get_mut(r, c) = Tile::Empty;
                         *self.get_mut(r, col_pos) = Tile::Rock;
+                        hash = (hash * HASH_FACTOR + col_pos) % HASH_MODULO;
                         col_pos = col_pos.saturating_sub(1);
                     }
                 }
             }
         }
+        hash
     }
 }
 
@@ -238,7 +235,7 @@ impl FromStr for Input {
     }
 }
 
-#[derive(Debug, Clone, Copy, Hash)]
+#[derive(Debug, Clone, Copy)]
 enum Tile {
     Empty,
     Fixed,
