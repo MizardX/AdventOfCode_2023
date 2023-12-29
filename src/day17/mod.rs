@@ -40,7 +40,7 @@ fn part_1(input: &Input) -> usize {
     let (_path, dist) = pathfinding::prelude::astar(
         &start,
         |n| n.neighbors(0, 3, input),
-        |n| n.pos.distance(goal_pos),
+        |n| n.pos.manhattan_distance(goal_pos),
         |n| n.pos.eq(&goal_pos),
     )
     .unwrap();
@@ -57,7 +57,7 @@ fn part_2(input: &Input) -> usize {
     let (_path, dist) = pathfinding::prelude::astar(
         &start,
         |n| n.neighbors(4, 10, input),
-        |n| n.pos.distance(goal_pos),
+        |n| n.pos.manhattan_distance(goal_pos),
         |n| n.pos.eq(&goal_pos),
     )
     .unwrap();

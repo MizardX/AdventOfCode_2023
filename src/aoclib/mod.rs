@@ -29,7 +29,13 @@ impl Pos {
         Self { row, col }
     }
 
-    pub fn distance(self, other: Self) -> usize {
+    pub fn manhattan_distance(self, other: Self) -> usize {
+        let dr = self.row().abs_diff(other.row());
+        let dc = self.col().abs_diff(other.col());
+        dr + dc
+    }
+
+    pub fn eucledian_distance(self, other: Self) -> usize {
         let dr = self.row().abs_diff(other.row());
         let dc = self.col().abs_diff(other.col());
         int_sqrt(dr * dr + dc * dc)
