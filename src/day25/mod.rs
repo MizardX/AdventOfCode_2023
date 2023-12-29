@@ -1,9 +1,7 @@
 #![warn(clippy::pedantic)]
 
-use smallvec::SmallVec;
-use std::cmp::Reverse;
 use std::collections::hash_map::Entry;
-use std::collections::{BinaryHeap, HashMap, VecDeque};
+use std::collections::HashMap;
 use std::fmt::Debug;
 use thiserror::Error;
 
@@ -25,165 +23,213 @@ pub fn run() {
 
 fn part_1(input: &WiringDiagram) -> usize {
     let n = input.components.len();
-    let mut heat = vec![0; n * n];
-    let mut visited = vec![false; n];
-    let mut queue = VecDeque::with_capacity(n);
-    for source in 0..n {
-        for v in &mut visited {
-            *v = false;
-        }
-        queue.push_back((source, source));
-        while let Some((came_from, node)) = queue.pop_front() {
-            if visited[node] {
-                continue;
-            }
-            visited[node] = true;
-            heat[came_from * n + node] += 1;
-            heat[came_from + node * n] += 1;
+    let mut uf_outer = UnionFind::new(n);
+    let mut best_cut = None;
 
-            for &next in &input.components[node].edges {
-                if visited[next] {
+    while uf_outer.num_components > 1 {
+        let mut uf_inner = uf_outer.clone();
+        let mut root = uf_inner.find_root(0);
+        let mut second_last = root;
+        while uf_inner.num_components > 2 {
+            let mut tightest = None;
+            for candidate in 0..n {
+                let candidate_root = uf_inner.find_root(candidate);
+                if candidate_root == root || candidate_root != candidate {
                     continue;
                 }
-                queue.push_back((node, next));
+                let mut weight = 0_usize;
+                for &edge in &input.edges {
+                    let a_root = uf_inner.find_root(edge.from);
+                    let b_root = uf_inner.find_root(edge.to);
+                    if (a_root, b_root) == (candidate_root, root)
+                        || (a_root, b_root) == (root, candidate_root)
+                    {
+                        weight += 1;
+                    }
+                }
+                tightest = match tightest {
+                    Some((_, w)) if w >= weight => tightest,
+                    _ => Some((candidate, weight)),
+                };
             }
+            let (tightest, cut) = tightest.expect("At least one unmerged node remaining");
+
+            second_last = tightest;
+            uf_inner.union(root, tightest);
+            root = uf_inner.find_root(0);
         }
-    }
-    let mut hottest = BinaryHeap::with_capacity(7);
-    for (i, h) in heat.into_iter().enumerate() {
-        hottest.push((Reverse(h), i / n, i % n));
-        if hottest.len() > 6 {
-            hottest.pop();
-        }
-    }
-    let mut critical: Vec<usize> = Vec::with_capacity(6);
-    while let Some((_, n1, n2)) = hottest.pop() {
-        if !critical.contains(&n1) {
-            critical.push(n1);
-        }
-        if !critical.contains(&n2) {
-            critical.push(n2);
-        }
-    }
-    for v in &mut visited {
-        *v = false;
-    }
-    let mut num_visited = 0;
-    queue.push_back((0, 0));
-    while let Some((_, node)) = queue.pop_front() {
-        if visited[node] {
-            continue;
-        }
-        visited[node] = true;
-        num_visited += 1;
-        for &next in &input.components[node].edges {
-            if visited[next] {
+
+        let mut tightest = None;
+        for last in 0..n {
+            let last_root = uf_inner.find_root(last);
+            if last_root == root || last_root != last {
                 continue;
             }
-            if critical.contains(&node) && critical.contains(&next) {
-                continue;
+            let mut weight = 0_usize;
+            for &edge in &input.edges {
+                let a_root = uf_inner.find_root(edge.from);
+                let b_root = uf_inner.find_root(edge.to);
+                if (a_root, b_root) == (last_root, root) || (a_root, b_root) == (root, last_root) {
+                    weight += 1;
+                }
             }
-            queue.push_back((next, next));
+            tightest = match tightest {
+                Some((_, w)) if w >= weight => tightest,
+                _ => Some((last, weight)),
+            };
+        }
+        let (last, cut) = tightest.expect("At least two unmerged nodes remaining");
+
+
+        let grouped = uf_inner.group_size(root);
+        let ungrouped = uf_inner.group_size(last);
+
+
+        best_cut = match best_cut {
+            Some((c, _, _)) if c <= cut => best_cut,
+            _ => {
+                Some((cut, grouped, ungrouped))
+            },
+        };
+
+        uf_outer.union(second_last, last);
+    }
+
+    dbg!(best_cut);
+
+    let best_cut = best_cut.expect("Minimum exists");
+    best_cut.1 * best_cut.2
+}
+
+#[derive(Debug, Clone)]
+struct UnionFind {
+    nodes: Vec<UnionFindNode>,
+    num_components: usize,
+}
+
+impl UnionFind {
+    pub fn new(num_nodes: usize) -> Self {
+        let nodes = (0..num_nodes).map(|i| UnionFindNode::new(i, 1)).collect();
+        Self {
+            nodes,
+            num_components: num_nodes,
         }
     }
-    num_visited * (n - num_visited)
+
+    pub fn find_root(&mut self, mut ix: usize) -> usize {
+        let mut parent_ix = self.nodes[ix].parent;
+        while parent_ix != ix {
+            let parent_parent_ix = self.nodes[parent_ix].parent;
+            self.nodes[ix].parent = parent_parent_ix;
+            ix = parent_ix;
+            parent_ix = parent_parent_ix;
+        }
+        ix
+    }
+
+    pub fn group_size(&mut self, mut ix: usize) -> usize {
+        ix = self.find_root(ix);
+        self.nodes[ix].size
+    }
+
+    pub fn union(&mut self, mut x: usize, mut y: usize) -> bool {
+        x = self.find_root(x);
+        y = self.find_root(y);
+        if x == y {
+            return false;
+        }
+        if self.nodes[x].size < self.nodes[y].size {
+            std::mem::swap(&mut x, &mut y);
+        }
+        // self.size[x] >= self.size[y]
+        self.nodes[y].parent = x;
+        self.nodes[x].size += self.nodes[y].size;
+        self.num_components -= 1;
+        true
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct UnionFindNode {
+    parent: usize,
+    size: usize,
+}
+
+impl UnionFindNode {
+    fn new(parent: usize, size: usize) -> Self {
+        Self { parent, size }
+    }
 }
 
 #[derive(Clone)]
-struct Nodes<'a> {
+struct Node<'a> {
     name: &'a str,
-    edges: SmallVec<[usize; 9]>,
 }
 
-impl<'a> Debug for Nodes<'a> {
+impl<'a> Debug for Node<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("")
-            .field(&self.name)
-            .field(&self.edges)
-            .finish()
+        f.debug_tuple("Node").field(&self.name).finish()
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Edge {
+    from: usize,
+    to: usize,
+}
+
+impl Edge {
+    fn new(from: usize, to: usize) -> Self {
+        Self { from, to }
+    }
+}
+
+impl Debug for Edge {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("").field(&self.from).field(&self.to).finish()
     }
 }
 
 #[derive(Debug, Clone)]
 struct WiringDiagram<'a> {
-    components: Vec<Nodes<'a>>,
+    components: Vec<Node<'a>>,
+    edges: Vec<Edge>,
 }
 
 impl<'a> TryFrom<&'a str> for WiringDiagram<'a> {
     type Error = ParseInputError;
 
     fn try_from(text: &'a str) -> Result<Self, Self::Error> {
-        let mut component_builders: Vec<ComponentBuilder<'a>> = Vec::new();
+        let mut components: Vec<Node<'a>> = Vec::new();
+        let mut edges: Vec<Edge> = Vec::new();
         let mut name_lookup = HashMap::new();
         for line in text.lines() {
-            let builder: ComponentBuilder<'a> = line.try_into()?;
-            let ix = component_builders.len();
-            name_lookup.insert(builder.name, ix);
-            component_builders.push(builder);
-        }
-        for ix in 0..component_builders.len() {
-            for j in 0..component_builders[ix].connected_to.len() {
-                let name = component_builders[ix].connected_to[j];
-                let ix2 = match name_lookup.entry(name) {
+            let (name, rest) = line
+                .split_once(':')
+                .ok_or(ParseInputError::ExpectedChar(':'))?;
+            let from_ix = match name_lookup.entry(name) {
+                Entry::Occupied(o) => *o.get(),
+                Entry::Vacant(v) => {
+                    let ix = components.len();
+                    components.push(Node { name });
+                    v.insert(ix);
+                    ix
+                }
+            };
+            for to in rest.trim_start().split(' ') {
+                let to_ix = match name_lookup.entry(to) {
                     Entry::Occupied(o) => *o.get(),
                     Entry::Vacant(v) => {
-                        let ix = component_builders.len();
-                        let cmp = ComponentBuilder::new(name, SmallVec::new());
-                        component_builders.push(cmp);
+                        let ix = components.len();
+                        components.push(Node { name: to });
                         v.insert(ix);
                         ix
                     }
                 };
-                component_builders[ix].connected_to_ixs.push(ix2);
-                component_builders[ix2].connected_from_ixs.push(ix);
+                edges.push(Edge::new(from_ix, to_ix));
             }
         }
-        let components = component_builders.into_iter().map(|b| b.build()).collect();
-        Ok(Self { components })
-    }
-}
-
-#[derive(Clone)]
-struct ComponentBuilder<'a> {
-    name: &'a str,
-    connected_to: SmallVec<[&'a str; 6]>,
-    connected_to_ixs: SmallVec<[usize; 6]>,
-    connected_from_ixs: SmallVec<[usize; 6]>,
-}
-
-impl<'a> ComponentBuilder<'a> {
-    pub fn new(name: &'a str, connected_to: SmallVec<[&'a str; 6]>) -> Self {
-        Self {
-            name,
-            connected_to,
-            connected_to_ixs: SmallVec::new(),
-            connected_from_ixs: SmallVec::new(),
-        }
-    }
-
-    pub fn build(&self) -> Nodes<'a> {
-        let mut connected_to = SmallVec::new();
-        connected_to.extend_from_slice(&self.connected_to_ixs);
-        connected_to.extend_from_slice(&self.connected_from_ixs);
-        Nodes {
-            name: self.name,
-            edges: connected_to,
-        }
-    }
-}
-
-impl<'a> TryFrom<&'a str> for ComponentBuilder<'a> {
-    type Error = ParseInputError;
-
-    fn try_from(line: &'a str) -> Result<Self, Self::Error> {
-        let (name, rest) = line
-            .split_once(": ")
-            .ok_or(ParseInputError::ExpectedChar(':'))?;
-        let mut connected_to = SmallVec::new();
-        for ref_name in rest.split(' ') {
-            connected_to.push(ref_name);
-        }
-        Ok(Self::new(name, connected_to))
+        Ok(Self { components, edges })
     }
 }
 
