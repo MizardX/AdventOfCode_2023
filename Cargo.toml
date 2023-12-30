@@ -8,5 +8,6 @@ edition = "2021"
 [dependencies]
 num-traits = "0.2.17"
 pathfinding = "4.6.0"
+rand = "0.8.5"
 smallvec = { version = "1.11.2", features = ["const_generics"] }
 thiserror = "1.0.50"

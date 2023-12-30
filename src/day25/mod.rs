@@ -1,9 +1,10 @@
 #![warn(clippy::pedantic)]
 
+use rand::rngs::ThreadRng;
+use rand::{thread_rng, Rng};
 use smallvec::SmallVec;
-use std::cmp::Reverse;
 use std::collections::hash_map::Entry;
-use std::collections::{BinaryHeap, HashMap, VecDeque};
+use std::collections::HashMap;
 use std::fmt::Debug;
 use thiserror::Error;
 
@@ -24,69 +25,145 @@ pub fn run() {
 }
 
 fn part_1(input: &WiringDiagram) -> usize {
-    let n = input.components.len();
-    let mut heat = vec![0; n * n];
-    let mut visited = vec![false; n];
-    let mut queue = VecDeque::with_capacity(n);
-    for source in 0..n {
-        for v in &mut visited {
-            *v = false;
-        }
-        queue.push_back((source, source));
-        while let Some((came_from, node)) = queue.pop_front() {
-            if visited[node] {
-                continue;
-            }
-            visited[node] = true;
-            heat[came_from * n + node] += 1;
-            heat[came_from + node * n] += 1;
+    let mut karger = Karger::new(input);
+    let (a, b) = karger.run_to_completion();
+    a * b
+}
 
-            for &next in &input.components[node].edges {
-                if visited[next] {
-                    continue;
+/// Implementation of Karger's algoritm. <https://en.wikipedia.org/wiki/Karger%27s_algorithm>
+/// Adapted from <https://github.com/kuviman/advent_of_code_2023/blob/d6838bfca881c38134b357636604bf98b69833dd/src/bin/day25/main.rs#L74>
+struct Karger<'a> {
+    diagram: &'a WiringDiagram<'a>,
+    edges: Vec<[usize; 2]>,
+    union_find: UnionFind,
+    rng: ThreadRng,
+}
+
+impl<'a> Karger<'a> {
+    fn new(diagram: &'a WiringDiagram) -> Self {
+        Self {
+            diagram,
+            edges: Vec::with_capacity(diagram.edges.len()),
+            union_find: UnionFind::new(diagram.components.len()),
+            rng: thread_rng(),
+        }
+    }
+
+    fn reset(&mut self) {
+        self.edges.clear();
+        self.edges.extend_from_slice(&self.diagram.edges);
+        self.union_find.reset();
+    }
+
+    fn single_cycle(&mut self) -> usize {
+        self.reset();
+
+        while self.union_find.num_components > 2 {
+            let [a, b] = self
+                .edges
+                .swap_remove(self.rng.gen_range(0..self.edges.len()));
+            self.union_find.union(a, b);
+        }
+
+        self.edges
+            .iter()
+            .filter(|&&[a, b]| self.union_find.find_root(a) != self.union_find.find_root(b))
+            .count()
+    }
+
+    fn run_to_completion(&mut self) -> (usize, usize) {
+        loop {
+            let edges_left = self.single_cycle();
+
+            if edges_left == 3 {
+                return self
+                    .union_find
+                    .get_two_components()
+                    .expect("Two components left");
+            }
+        }
+    }
+}
+
+struct UnionFindNode {
+    parent_ix: usize,
+    size: usize,
+}
+
+impl UnionFindNode {
+    fn new(parent_ix: usize, size: usize) -> Self {
+        Self { parent_ix, size }
+    }
+}
+
+struct UnionFind {
+    nodes: Vec<UnionFindNode>,
+    num_components: usize,
+}
+
+impl UnionFind {
+    pub fn new(num_nodes: usize) -> Self {
+        let nodes = (0..num_nodes).map(|i| UnionFindNode::new(i, 1)).collect();
+        Self {
+            nodes,
+            num_components: num_nodes,
+        }
+    }
+
+    pub fn reset(&mut self) {
+        for (ix, node) in self.nodes.iter_mut().enumerate() {
+            node.parent_ix = ix;
+            node.size = 1;
+        }
+        self.num_components = self.nodes.len();
+    }
+
+    pub fn get_two_components(&self) -> Option<(usize, usize)> {
+        if self.num_components != 2 {
+            return None;
+        }
+        let mut first = None;
+        let mut second = None;
+        for (i, node) in self.nodes.iter().enumerate() {
+            if node.parent_ix == i {
+                if first.is_none() {
+                    first = Some(node.size);
+                } else if second.is_none() {
+                    second = Some(node.size);
+                } else {
+                    unreachable!()
                 }
-                queue.push_back((node, next));
             }
         }
+        Some((first?, second?))
     }
-    let mut hottest = BinaryHeap::with_capacity(7);
-    for (i, h) in heat.into_iter().enumerate() {
-        hottest.push((Reverse(h), i / n, i % n));
-        if hottest.len() > 6 {
-            hottest.pop();
+
+    pub fn find_root(&mut self, mut ix: usize) -> usize {
+        let mut parent_ix = self.nodes[ix].parent_ix;
+        while parent_ix != ix {
+            let parent_parent_ix = self.nodes[parent_ix].parent_ix;
+            self.nodes[ix].parent_ix = parent_parent_ix;
+            ix = parent_ix;
+            parent_ix = parent_parent_ix;
         }
+        ix
     }
-    let mut critical: Vec<usize> = Vec::with_capacity(6);
-    while let Some((_, n1, n2)) = hottest.pop() {
-        if !critical.contains(&n1) {
-            critical.push(n1);
+
+    pub fn union(&mut self, mut x: usize, mut y: usize) -> bool {
+        x = self.find_root(x);
+        y = self.find_root(y);
+        if x == y {
+            return false;
         }
-        if !critical.contains(&n2) {
-            critical.push(n2);
+        if self.nodes[x].size < self.nodes[y].size {
+            std::mem::swap(&mut x, &mut y);
         }
+        // self.size[x] >= self.size[y]
+        self.nodes[y].parent_ix = x;
+        self.nodes[x].size += self.nodes[y].size;
+        self.num_components -= 1;
+        true
     }
-    for v in &mut visited {
-        *v = false;
-    }
-    let mut num_visited = 0;
-    queue.push_back((0, 0));
-    while let Some((_, node)) = queue.pop_front() {
-        if visited[node] {
-            continue;
-        }
-        visited[node] = true;
-        num_visited += 1;
-        for &next in &input.components[node].edges {
-            if visited[next] {
-                continue;
-            }
-            if critical.contains(&node) && critical.contains(&next) {
-                continue;
-            }
-            queue.push_back((next, next));
-        }
-    }
-    num_visited * (n - num_visited)
 }
 
 #[derive(Clone)]
@@ -106,84 +183,44 @@ impl<'a> Debug for Nodes<'a> {
 
 #[derive(Debug, Clone)]
 struct WiringDiagram<'a> {
-    components: Vec<Nodes<'a>>,
+    components: Vec<&'a str>,
+    edges: Vec<[usize; 2]>,
 }
 
 impl<'a> TryFrom<&'a str> for WiringDiagram<'a> {
     type Error = ParseInputError;
 
     fn try_from(text: &'a str) -> Result<Self, Self::Error> {
-        let mut component_builders: Vec<ComponentBuilder<'a>> = Vec::new();
         let mut name_lookup = HashMap::new();
+        let mut components = Vec::new();
+        let mut edges = Vec::new();
         for line in text.lines() {
-            let builder: ComponentBuilder<'a> = line.try_into()?;
-            let ix = component_builders.len();
-            name_lookup.insert(builder.name, ix);
-            component_builders.push(builder);
-        }
-        for ix in 0..component_builders.len() {
-            for j in 0..component_builders[ix].connected_to.len() {
-                let name = component_builders[ix].connected_to[j];
-                let ix2 = match name_lookup.entry(name) {
+            let (name, rest) = line
+                .split_once(':')
+                .ok_or(ParseInputError::ExpectedChar(':'))?;
+            let node_ix = match name_lookup.entry(name) {
+                Entry::Occupied(o) => *o.get(),
+                Entry::Vacant(v) => {
+                    let ix = components.len();
+                    components.push(name);
+                    v.insert(ix);
+                    ix
+                }
+            };
+            for neighbor in rest.trim_start().split(' ') {
+                let neighbor_ix = match name_lookup.entry(neighbor) {
                     Entry::Occupied(o) => *o.get(),
                     Entry::Vacant(v) => {
-                        let ix = component_builders.len();
-                        let cmp = ComponentBuilder::new(name, SmallVec::new());
-                        component_builders.push(cmp);
+                        let ix = components.len();
+                        components.push(neighbor);
                         v.insert(ix);
                         ix
                     }
                 };
-                component_builders[ix].connected_to_ixs.push(ix2);
-                component_builders[ix2].connected_from_ixs.push(ix);
+                edges.push([node_ix, neighbor_ix]);
             }
         }
-        let components = component_builders.into_iter().map(|b| b.build()).collect();
-        Ok(Self { components })
-    }
-}
-
-#[derive(Clone)]
-struct ComponentBuilder<'a> {
-    name: &'a str,
-    connected_to: SmallVec<[&'a str; 6]>,
-    connected_to_ixs: SmallVec<[usize; 6]>,
-    connected_from_ixs: SmallVec<[usize; 6]>,
-}
-
-impl<'a> ComponentBuilder<'a> {
-    pub fn new(name: &'a str, connected_to: SmallVec<[&'a str; 6]>) -> Self {
-        Self {
-            name,
-            connected_to,
-            connected_to_ixs: SmallVec::new(),
-            connected_from_ixs: SmallVec::new(),
-        }
-    }
-
-    pub fn build(&self) -> Nodes<'a> {
-        let mut connected_to = SmallVec::new();
-        connected_to.extend_from_slice(&self.connected_to_ixs);
-        connected_to.extend_from_slice(&self.connected_from_ixs);
-        Nodes {
-            name: self.name,
-            edges: connected_to,
-        }
-    }
-}
-
-impl<'a> TryFrom<&'a str> for ComponentBuilder<'a> {
-    type Error = ParseInputError;
-
-    fn try_from(line: &'a str) -> Result<Self, Self::Error> {
-        let (name, rest) = line
-            .split_once(": ")
-            .ok_or(ParseInputError::ExpectedChar(':'))?;
-        let mut connected_to = SmallVec::new();
-        for ref_name in rest.split(' ') {
-            connected_to.push(ref_name);
-        }
-        Ok(Self::new(name, connected_to))
+        Ok(Self { components, edges })
     }
 }
 
@@ -201,12 +238,19 @@ mod tests {
     use test::Bencher;
 
     #[bench]
-    fn run_parse_input(b: &mut Bencher) {
+    fn run_1_parse_input(b: &mut Bencher) {
         b.iter(|| black_box(WiringDiagram::try_from(INPUT).expect("Parse input")));
     }
 
     #[bench]
-    fn run_part_1(b: &mut Bencher) {
+    fn run_2_single_cycle(b: &mut Bencher) {
+        let input = INPUT.try_into().expect("Parse input");
+        let mut karger = Karger::new(&input);
+        b.iter(|| black_box(karger.single_cycle()));
+    }
+
+    #[bench]
+    fn run_3_full(b: &mut Bencher) {
         let input = INPUT.try_into().expect("Parse input");
         b.iter(|| black_box(part_1(&input)));
     }
