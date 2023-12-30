@@ -7,6 +7,9 @@ use thiserror::Error;
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
 
+/// # Panics
+///
+/// Panics if input is malformed.
 pub fn run() {
     println!(".Day 11");
 
@@ -29,11 +32,13 @@ pub fn run() {
     println!("')");
 }
 
-fn part_1(input: &Input) -> u64 {
+#[must_use]
+pub fn part_1(input: &Input) -> u64 {
     distance_between_galaxies(input, 2)
 }
 
-fn part_2(input: &Input) -> u64 {
+#[must_use]
+pub fn part_2(input: &Input) -> u64 {
     distance_between_galaxies(input, 1_000_000)
 }
 
@@ -57,7 +62,7 @@ fn distance_between_galaxies(input: &Input, empty_scale: u64) -> u64 {
         row_prev = row_cur;
         row_short += dela_row * i as u64;
         row_long += dela_row.saturating_sub(1) * i as u64;
-        
+
         let col_cur = input.galaxy_cols[i];
         let dela_cols = (col_cur - col_prev) as u64;
         col_prev = col_cur;
@@ -72,13 +77,13 @@ fn distance_between_galaxies(input: &Input, empty_scale: u64) -> u64 {
 }
 
 #[derive(Debug, Clone)]
-struct Input {
+pub struct Input {
     galaxy_rows: Vec<usize>,
     galaxy_cols: Vec<usize>,
 }
 
 #[derive(Debug, Error)]
-enum ParseInputError {
+pub enum ParseInputError {
     #[error("Input is empty")]
     EmptyInput,
     #[error("Lines not same length")]
@@ -124,27 +129,11 @@ fn parse_input(text: &str) -> Input {
     text.parse::<Input>().expect("Parse input")
 }
 
-#[cfg(test)]
-mod tests {
-    use std::hint::black_box;
+/// # Panics
+///
+/// Panics if input is malformed.
 
-    use super::*;
-    use test::Bencher;
-
-    #[bench]
-    fn run_parse_input(b: &mut Bencher) {
-        b.iter(|| black_box(parse_input(INPUT)));
-    }
-
-    #[bench]
-    fn run_part_1(b: &mut Bencher) {
-        let input = parse_input(INPUT);
-        b.iter(|| black_box(part_1(&input)));
-    }
-
-    #[bench]
-    fn run_part_2(b: &mut Bencher) {
-        let input = parse_input(INPUT);
-        b.iter(|| black_box(part_2(&input)));
-    }
+#[must_use]
+pub fn parse_test_input() -> Input {
+    INPUT.parse().expect("Real input")
 }

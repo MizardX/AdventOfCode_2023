@@ -9,6 +9,9 @@ use thiserror::Error;
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
 
+/// # Panics
+///
+/// Panics if input is malformed.
 pub fn run() {
     println!(".Day 05");
 
@@ -26,7 +29,8 @@ pub fn run() {
 }
 
 #[allow(unused)]
-fn part_1(input: &Input) -> isize {
+#[must_use]
+pub fn part_1(input: &Input) -> isize {
     let mut min = isize::MAX;
     for &(mut seed) in &input.seeds {
         for mapping in &input.mappings {
@@ -42,7 +46,8 @@ fn part_1(input: &Input) -> isize {
 }
 
 #[allow(unused)]
-fn part_2(input: &Input) -> isize {
+#[must_use]
+pub fn part_2(input: &Input) -> isize {
     let mut seed_ranges = input
         .seeds
         .array_chunks::<2>()
@@ -215,7 +220,7 @@ impl FromStr for Mapping {
 }
 
 #[derive(Debug, Clone)]
-struct Input {
+pub struct Input {
     seeds: Vec<isize>,
     mappings: Vec<Vec<Mapping>>,
     mappings2: Vec<Vec<Mapping>>,
@@ -270,31 +275,11 @@ fn parse_input(text: &str) -> Result<Input, ParseError> {
     })
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use test::Bencher;
+/// # Panics
+///
+/// Panics if input is malformed.
 
-    #[bench]
-    fn run_parse_input(b: &mut Bencher) {
-        b.iter(|| {
-            std::hint::black_box(parse_input(include_str!("input.txt")).unwrap());
-        });
-    }
-
-    #[bench]
-    fn run_part_1(b: &mut Bencher) {
-        let input = parse_input(INPUT).expect("Real input parsed");
-        b.iter(|| {
-            std::hint::black_box(part_1(&input));
-        });
-    }
-
-    #[bench]
-    fn run_part_2(b: &mut Bencher) {
-        let input = parse_input(INPUT).expect("Real input parsed");
-        b.iter(|| {
-            std::hint::black_box(part_2(&input));
-        });
-    }
+#[must_use]
+pub fn parse_test_input() -> Input {
+    parse_input(INPUT).expect("Parse input")
 }

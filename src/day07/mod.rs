@@ -12,19 +12,21 @@ pub fn run() {
     println!(".Day 07");
 
     println!("++Example");
-    let mut example = parse_input(EXAMPLE);
-    println!("|+-Part 1: {} (expected 6440)", part_1(&mut example));
-    println!("|'-Part 2: {} (expected 5905)", part_2(&mut example));
+    let example = parse_input(EXAMPLE);
+    println!("|+-Part 1: {} (expected 6440)", part_1(&example));
+    println!("|'-Part 2: {} (expected 5905)", part_2(&example));
 
     println!("++Input");
-    let mut input = parse_input(INPUT);
-    println!("|+-Part 1: {} (expected 253313241)", part_1(&mut input));
-    println!("|'-Part 2: {} (expected 253362743)", part_2(&mut input));
+    let input = parse_input(INPUT);
+    println!("|+-Part 1: {} (expected 253313241)", part_1(&input));
+    println!("|'-Part 2: {} (expected 253362743)", part_2(&input));
     println!("')");
 }
 
 #[allow(unused)]
-fn part_1(input: &mut [Input]) -> u64 {
+#[must_use]
+pub fn part_1(input: &[Input]) -> u64 {
+    let mut input = input.to_vec();
     input.sort_unstable_by_key(Input::score);
     let mut sum = 0;
     for (i, hand) in input.iter().enumerate() {
@@ -34,7 +36,9 @@ fn part_1(input: &mut [Input]) -> u64 {
 }
 
 #[allow(unused)]
-fn part_2(input: &mut [Input]) -> u64 {
+#[must_use]
+pub fn part_2(input: &[Input]) -> u64 {
+    let mut input = input.to_vec();
     input.sort_unstable_by_key(Input::score_joker);
     let mut sum = 0;
     for (i, hand) in input.iter().enumerate() {
@@ -44,7 +48,7 @@ fn part_2(input: &mut [Input]) -> u64 {
 }
 
 #[derive(Debug, Error)]
-enum ParseInputError {
+pub enum ParseInputError {
     #[error("Invalid card: {0}")]
     InvalidCard(char),
     #[error("Input line too short")]
@@ -111,13 +115,13 @@ enum HandType {
 }
 
 #[derive(Debug, Clone, Default)]
-struct Input {
+pub struct Input {
     cards: [Card; 5],
     bet: u64,
 }
 
 impl Input {
-    pub fn classify(&self) -> HandType {
+    fn classify(&self) -> HandType {
         let c = &self.cards;
         match u8::from(c[0] == c[1])
             + u8::from(c[0] == c[2])
@@ -141,7 +145,7 @@ impl Input {
         }
     }
 
-    pub fn classify_joker(&self) -> HandType {
+    fn classify_joker(&self) -> HandType {
         let mut jokers = 0;
         for c in self.cards {
             jokers += u8::from(c == Card::Jack);
@@ -159,7 +163,7 @@ impl Input {
         }
     }
 
-    pub fn score(&self) -> u32 {
+    fn score(&self) -> u32 {
         self.cards
             .iter()
             .fold(u32::from(self.classify() as u8), |s, &c| {
@@ -167,7 +171,7 @@ impl Input {
             })
     }
 
-    pub fn score_joker(&self) -> u32 {
+    fn score_joker(&self) -> u32 {
         self.cards
             .iter()
             .fold(u32::from(self.classify_joker() as u8), |s, &c| match c {
@@ -205,27 +209,11 @@ fn parse_input(text: &str) -> Vec<Input> {
     res
 }
 
-#[cfg(test)]
-mod tests {
-    use std::hint::black_box;
+/// # Panics
+///
+/// Panics if input is malformed.
 
-    use super::*;
-    use test::Bencher;
-
-    #[bench]
-    fn run_parse_input(b: &mut Bencher) {
-        b.iter(|| black_box(parse_input(INPUT)));
-    }
-
-    #[bench]
-    fn run_part_1(b: &mut Bencher) {
-        let mut input = parse_input(INPUT);
-        b.iter(|| black_box(part_1(&mut input)));
-    }
-
-    #[bench]
-    fn run_part_2(b: &mut Bencher) {
-        let mut input = parse_input(INPUT);
-        b.iter(|| black_box(part_2(&mut input)));
-    }
+#[must_use]
+pub fn parse_test_input() -> Vec<Input> {
+    parse_input(INPUT)
 }

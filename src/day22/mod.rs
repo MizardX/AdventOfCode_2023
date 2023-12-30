@@ -6,13 +6,16 @@ use std::num::ParseIntError;
 use std::str::FromStr;
 use thiserror::Error;
 
-use crate::aoclib::{Grid, Pos, CommonParseError};
+use crate::aoclib::{CommonParseError, Grid, Pos};
 
 type Coordinate = crate::aoclib::Coordinate<u16>;
 
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
 
+/// # Panics
+///
+/// Panics if input is malformed.
 pub fn run() {
     println!(".Day 22");
 
@@ -29,13 +32,15 @@ pub fn run() {
 }
 
 #[allow(clippy::cast_possible_wrap)]
-fn part_1(board: &Board) -> usize {
+#[must_use]
+pub fn part_1(board: &Board) -> usize {
     let mut simulator = Simulator::new(board);
     simulator.settle();
     simulator.count_critical()
 }
 
-fn part_2(board: &Board) -> usize {
+#[must_use]
+pub fn part_2(board: &Board) -> usize {
     let mut simulator = Simulator::new(board);
     simulator.settle();
     simulator.sum_knocked_down()
@@ -81,7 +86,6 @@ impl<'a> Simulator<'a> {
 
         // Bottom to top
         for (piece_ix, piece) in self.board.pieces.iter().enumerate() {
-
             // Find the height of the highest brick below this one
             let mut max_z = 0;
             for y in piece.low.y..=piece.high.y {
@@ -222,10 +226,10 @@ impl FromStr for Piece {
 }
 
 #[derive(Debug, Clone)]
-struct Board {
-    pub pieces: Vec<Piece>,
-    pub min: Coordinate,
-    pub max: Coordinate,
+pub struct Board {
+    pieces: Vec<Piece>,
+    min: Coordinate,
+    max: Coordinate,
 }
 
 impl Board {
@@ -253,36 +257,20 @@ impl FromStr for Board {
 }
 
 #[derive(Debug, Error)]
-enum ParseInputError {
+pub enum ParseInputError {
     #[error("Expected character: '{0}'")]
     ExpectedChar(char),
     #[error("Not an integer: {0:?}")]
     Integer(#[from] ParseIntError),
     #[error("{0:?}")]
-    CommonError(#[from] CommonParseError)
+    CommonError(#[from] CommonParseError),
 }
 
-#[cfg(test)]
-mod tests {
-    use std::hint::black_box;
+/// # Panics
+///
+/// Panics if input is malformed.
 
-    use super::*;
-    use test::Bencher;
-
-    #[bench]
-    fn run_parse_input(b: &mut Bencher) {
-        b.iter(|| black_box(INPUT.parse::<Board>().expect("Parse input")));
-    }
-
-    #[bench]
-    fn run_part_1(b: &mut Bencher) {
-        let input = INPUT.parse().expect("Parse input");
-        b.iter(|| black_box(part_1(&input)));
-    }
-
-    #[bench]
-    fn run_part_2(b: &mut Bencher) {
-        let input = INPUT.parse().expect("Parse input");
-        b.iter(|| black_box(part_2(&input)));
-    }
+#[must_use]
+pub fn parse_test_input() -> Board {
+    INPUT.parse().expect("Parse input")
 }

@@ -11,6 +11,9 @@ use thiserror::Error;
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
 
+/// # Panics
+///
+/// Panics if input is malformed.
 pub fn run() {
     println!(".Day 19");
 
@@ -32,7 +35,8 @@ pub fn run() {
     println!("')");
 }
 
-fn part_1(input: &Input) -> u64 {
+#[must_use]
+pub fn part_1(input: &Input) -> u64 {
     let mut sum = 0;
     'parts: for &part in &input.parts {
         let mut action = input.workflow_start;
@@ -48,7 +52,8 @@ fn part_1(input: &Input) -> u64 {
     sum
 }
 
-fn part_2(input: &Input) -> u64 {
+#[must_use]
+pub fn part_2(input: &Input) -> u64 {
     let mut pending = Vec::new();
     pending.push((PartRange::default(), input.workflow_start));
     let mut sum_accepted = 0;
@@ -56,7 +61,7 @@ fn part_2(input: &Input) -> u64 {
         match action {
             Action::Accept => {
                 sum_accepted += part_range.count();
-            },
+            }
             Action::Reject => (),
             Action::Forward(next) => input.workflows[next].split(part_range, &mut pending),
         }
@@ -472,7 +477,7 @@ impl<'a> TryFrom<&'a str> for WorkflowBuilder<'a> {
 }
 
 #[derive(Debug, Error)]
-enum ParseInputError {
+pub enum ParseInputError {
     #[error("Unexpected character: '{0}'")]
     InvalidChar(char),
     #[error("Did not find expected char: '{0}'")]
@@ -484,7 +489,7 @@ enum ParseInputError {
 }
 
 #[derive(Debug, Clone)]
-struct Input {
+pub struct Input {
     workflows: Vec<Workflow>,
     workflow_start: Action,
     parts: Vec<Part>,
@@ -527,27 +532,11 @@ impl FromStr for Input {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::hint::black_box;
+/// # Panics
+///
+/// Panics if input is malformed.
 
-    use super::*;
-    use test::Bencher;
-
-    #[bench]
-    fn run_parse_input(b: &mut Bencher) {
-        b.iter(|| black_box(INPUT.parse::<Input>().expect("Parse input")));
-    }
-
-    #[bench]
-    fn run_part_1(b: &mut Bencher) {
-        let input = INPUT.parse().expect("Parse input");
-        b.iter(|| black_box(part_1(&input)));
-    }
-
-    #[bench]
-    fn run_part_2(b: &mut Bencher) {
-        let input = INPUT.parse().expect("Parse input");
-        b.iter(|| black_box(part_2(&input)));
-    }
+#[must_use]
+pub fn parse_test_input() -> Input {
+    INPUT.parse().expect("Parse input")
 }

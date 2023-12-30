@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use thiserror::Error;
 
-use crate::aoclib::{Dir, Grid, Pos, CommonParseError};
+use crate::aoclib::{CommonParseError, Dir, Grid, Pos};
 
 const EXAMPLE1: &str = include_str!("example1.txt");
 const EXAMPLE2: &str = include_str!("example2.txt");
@@ -14,6 +14,9 @@ const EXAMPLE3: &str = include_str!("example3.txt");
 const EXAMPLE4: &str = include_str!("example4.txt");
 const INPUT: &str = include_str!("input.txt");
 
+/// # Panics
+///
+/// Panics if input is malformed.
 pub fn run() {
     println!(".Day 10");
 
@@ -40,11 +43,13 @@ pub fn run() {
     println!("')");
 }
 
-fn part_1(input: &Input) -> isize {
+#[must_use]
+pub fn part_1(input: &Input) -> isize {
     walk_path(input).1 / 2
 }
 
-fn part_2(input: &Input) -> isize {
+#[must_use]
+pub fn part_2(input: &Input) -> isize {
     walk_path(input).0
 }
 
@@ -119,7 +124,7 @@ impl Pipe {
 }
 
 impl TryFrom<u8> for Pipe {
-    type Error = ParseError;
+    type Error = ParseInputError;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         Ok(match value {
@@ -131,13 +136,13 @@ impl TryFrom<u8> for Pipe {
             b'F' => Pipe::SE,
             b'.' => Pipe::X,
             b'S' => Pipe::S,
-            ch => return Err(ParseError::InvalidSymbol(ch as char)),
+            ch => return Err(ParseInputError::InvalidSymbol(ch as char)),
         })
     }
 }
 
 #[derive(Debug, Clone)]
-struct Input {
+pub struct Input {
     grid: Grid<Pipe>,
     start: Pos,
 }
@@ -165,7 +170,7 @@ impl Input {
 }
 
 #[derive(Debug, Error)]
-enum ParseError {
+pub enum ParseInputError {
     #[error("Invalid symbol: {0}")]
     InvalidSymbol(char),
     #[error("Missing start")]
@@ -173,17 +178,17 @@ enum ParseError {
     #[error("Integer overflow: {0}")]
     Overflow(#[from] TryFromIntError),
     #[error("{0:?}")]
-    CommonError(#[from] CommonParseError)
+    CommonError(#[from] CommonParseError),
 }
 
 impl FromStr for Input {
-    type Err = ParseError;
+    type Err = ParseInputError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut grid: Grid<Pipe> = s.parse()?;
         let start = grid.position(|p| p == Pipe::S).unwrap();
         if start == Pos::new(-1, -1) {
-            return Err(ParseError::MissingStart);
+            return Err(ParseInputError::MissingStart);
         }
         let start_pipe = match [Dir::N, Dir::E, Dir::S, Dir::W].map(|d| {
             grid.get(start + d)
@@ -195,34 +200,18 @@ impl FromStr for Input {
             [false, true, true, false] => Pipe::SE,
             [false, true, false, true] => Pipe::EW,
             [false, false, true, true] => Pipe::SW,
-            _ => return Err(ParseError::MissingStart),
+            _ => return Err(ParseInputError::MissingStart),
         };
         grid.set(start, start_pipe);
         Ok(Self { grid, start })
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::hint::black_box;
+/// # Panics
+///
+/// Panics if input is malformed.
 
-    use super::*;
-    use test::Bencher;
-
-    #[bench]
-    fn run_parse_input(b: &mut Bencher) {
-        b.iter(|| black_box(INPUT.parse::<Input>().expect("Parse input")));
-    }
-
-    #[bench]
-    fn run_part_1(b: &mut Bencher) {
-        let input = INPUT.parse().expect("Parse input");
-        b.iter(|| black_box(part_1(&input)));
-    }
-
-    #[bench]
-    fn run_part_2(b: &mut Bencher) {
-        let input = INPUT.parse().expect("Parse input");
-        b.iter(|| black_box(part_2(&input)));
-    }
+#[must_use]
+pub fn parse_test_input() -> Input {
+    INPUT.parse().expect("Real input")
 }

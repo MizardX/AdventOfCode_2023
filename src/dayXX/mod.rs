@@ -21,19 +21,21 @@ pub fn run() {
     println!("')");
 }
 
-fn part_1(_input: &Input) -> usize {
+#[must_use]
+pub fn part_1(_input: &Input) -> usize {
     0
 }
 
-fn part_2(_input: &Input) -> usize {
+#[must_use]
+pub fn part_2(_input: &Input) -> usize {
     0
 }
 
 #[derive(Debug, Clone)]
-struct Input {}
+pub struct Input {}
 
 #[derive(Debug, Error)]
-enum ParseInputError {
+pub enum ParseInputError {
     // #[error("Input is empty")]
     // EmptyInput,
     // #[error("Unexpected character: '{0}'")]
@@ -48,27 +50,7 @@ impl FromStr for Input {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::hint::black_box;
-
-    use super::*;
-    use test::Bencher;
-
-    #[bench]
-    fn run_parse_input(b: &mut Bencher) {
-        b.iter(|| black_box(INPUT.parse::<Input>().expect("Parse input")));
-    }
-
-    #[bench]
-    fn run_part_1(b: &mut Bencher) {
-        let input = INPUT.parse().expect("Parse input");
-        b.iter(|| black_box(part_1(&input)));
-    }
-
-    #[bench]
-    fn run_part_2(b: &mut Bencher) {
-        let input = INPUT.parse().expect("Parse input");
-        b.iter(|| black_box(part_2(&input)));
-    }
+#[must_use]
+pub fn parse_test_input() -> Input {
+    INPUT.parse().expect("Parse input")
 }

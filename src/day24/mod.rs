@@ -10,6 +10,9 @@ use crate::aoclib::{CommonParseError, Coordinate};
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
 
+/// # Panics
+///
+/// Panics if input is malformed.
 pub fn run() {
     println!(".Day 24");
 
@@ -31,7 +34,8 @@ pub fn run() {
     println!("')");
 }
 
-fn part_1<R: RangeBounds<f64>>(input: &Input, range: R) -> usize {
+#[must_use]
+pub fn part_1<R: RangeBounds<f64>>(input: &Input, range: R) -> usize {
     let mut count = 0;
     for (i, hail1) in input.hails.iter().enumerate() {
         for hail2 in &input.hails[i + 1..] {
@@ -74,7 +78,8 @@ fn intersection_2d(hail1: &Hail, hail2: &Hail) -> Option<Intersection2d> {
     Some(Intersection2d { x, y })
 }
 
-fn part_2(input: &Input) -> i128 {
+#[must_use]
+pub fn part_2(input: &Input) -> i128 {
     let p1 = &input.hails[0].position;
     let v1 = &input.hails[0].velocity;
     let p2 = &input.hails[1].position;
@@ -126,7 +131,7 @@ impl FromStr for Hail {
 }
 
 #[derive(Debug, Clone)]
-struct Input {
+pub struct Input {
     hails: Vec<Hail>,
 }
 
@@ -143,11 +148,7 @@ impl FromStr for Input {
 }
 
 #[derive(Debug, Error)]
-enum ParseInputError {
-    // #[error("Input is empty")]
-    // EmptyInput,
-    // #[error("Unexpected character: '{0}'")]
-    // InvalidChar(char),
+pub enum ParseInputError {
     #[error("Did not find expected char: '{0}'")]
     ExpectedChar(char),
     #[error("{0}")]
@@ -156,27 +157,11 @@ enum ParseInputError {
     InvalidFloat(#[from] ParseFloatError),
 }
 
-#[cfg(test)]
-mod tests {
-    use std::hint::black_box;
+/// # Panics
+///
+/// Panics if input is malformed.
 
-    use super::*;
-    use test::Bencher;
-
-    #[bench]
-    fn run_parse_input(b: &mut Bencher) {
-        b.iter(|| black_box(INPUT.parse::<Input>().expect("Parse input")));
-    }
-
-    #[bench]
-    fn run_part_1(b: &mut Bencher) {
-        let input = INPUT.parse().expect("Parse input");
-        b.iter(|| black_box(part_1(&input, 2e14..=4e14)));
-    }
-
-    #[bench]
-    fn run_part_2(b: &mut Bencher) {
-        let input = INPUT.parse().expect("Parse input");
-        b.iter(|| black_box(part_2(&input)));
-    }
+#[must_use]
+pub fn parse_test_input() -> Input {
+    INPUT.parse().expect("Parse input")
 }

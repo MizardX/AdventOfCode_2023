@@ -21,7 +21,8 @@ pub fn run() {
 }
 
 #[allow(unused)]
-fn part_1(input: &Input) -> i64 {
+#[must_use]
+pub fn part_1(input: &Input) -> i64 {
     let mut product = 1;
     for race in &input.races {
         product *= race.score();
@@ -30,7 +31,8 @@ fn part_1(input: &Input) -> i64 {
 }
 
 #[allow(unused)]
-fn part_2(input: &Input) -> i64 {
+#[must_use]
+pub fn part_2(input: &Input) -> i64 {
     let mut combined = Race::default();
     let scales = [1, 10, 100, 1_000, 10_000];
     for race in &input.races {
@@ -41,7 +43,7 @@ fn part_2(input: &Input) -> i64 {
 }
 
 #[derive(Debug, Clone)]
-struct Input {
+pub struct Input {
     races: Vec<Race>,
 }
 
@@ -64,7 +66,7 @@ impl Race {
     }
 
     pub fn score(&self) -> i64 {
-        #[allow(clippy::cast_possible_truncation,clippy::cast_precision_loss)]
+        #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
         let s = ((self.time * self.time - 4 * self.distance - 4) as f64).sqrt() as i64;
         let low = (self.time - s + 1) / 2;
         let high = (self.time + s) / 2;
@@ -93,33 +95,15 @@ fn parse_input(text: &str) -> Input {
         .zip(distance_it)
         .map(|(t, d)| Race::from_str(t, d).expect("integers"))
         .collect::<Vec<_>>();
-    
+
     Input { races }
 }
 
+/// # Panics
+///
+/// Panics if input is malformed.
 
-#[cfg(test)]
-mod tests {
-    use std::hint::black_box;
-
-    use super::*;
-    use test::Bencher;
-
-
-    #[bench]
-    fn run_parse_input(b: &mut Bencher) {
-        b.iter(|| black_box(parse_input(INPUT)));
-    }
-
-    #[bench]
-    fn run_part_1(b: &mut Bencher) {
-        let input = parse_input(INPUT);
-        b.iter(|| black_box(part_1(&input)));
-    }
-
-    #[bench]
-    fn run_part_2(b: &mut Bencher) {
-        let input = parse_input(INPUT);
-        b.iter(|| black_box(part_2(&input)));
-    }
+#[must_use]
+pub fn parse_test_input() -> Input {
+    parse_input(INPUT)
 }

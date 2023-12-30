@@ -23,7 +23,8 @@ pub fn run() {
     println!("')");
 }
 
-fn part_1(input: &Input) -> usize {
+#[must_use]
+pub fn part_1(input: &Input) -> usize {
     let mut sum: usize = 0;
     let mut symbol_lookups = [(); 3].map(|()| BTreeSet::new());
     for sym in &input.symbols[0] {
@@ -53,7 +54,8 @@ fn part_1(input: &Input) -> usize {
     sum
 }
 
-fn part_2(input: &Input) -> usize {
+#[must_use]
+pub fn part_2(input: &Input) -> usize {
     let mut sum: usize = 0;
     let mut num_lookups = [(); 3].map(|()| BTreeMap::new());
     for lbl in &input.labels[0] {
@@ -125,7 +127,7 @@ impl Sub<(i16, i16)> for Point {
 }
 
 #[derive(Debug, Clone, Default)]
-struct Input {
+pub struct Input {
     symbols: Vec<SmallVec<[Symbol; 9]>>,
     labels: Vec<SmallVec<[Label; 16]>>,
 }
@@ -190,27 +192,10 @@ fn parse_input(text: &str) -> Input {
     res
 }
 
-#[cfg(test)]
-mod tests {
-    use std::hint::black_box;
-
-    use super::*;
-    use test::Bencher;
-
-    #[bench]
-    fn run_parse_input(b: &mut Bencher) {
-        b.iter(|| black_box(parse_input(INPUT)));
-    }
-
-    #[bench]
-    fn run_part_1(b: &mut Bencher) {
-        let input = parse_input(INPUT);
-        b.iter(|| black_box(part_1(&input)));
-    }
-
-    #[bench]
-    fn run_part_2(b: &mut Bencher) {
-        let input = parse_input(INPUT);
-        b.iter(|| black_box(part_2(&input)));
-    }
+/// # Panics
+///
+/// Panics if input is malformed.
+#[must_use]
+pub fn parse_test_input() -> Input {
+    parse_input(INPUT)
 }

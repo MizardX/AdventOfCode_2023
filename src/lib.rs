@@ -1,23 +1,18 @@
-#![feature(test)]
 #![feature(array_chunks)]
 #![feature(try_blocks)]
 #![feature(step_trait)]
 #![feature(array_windows)]
 #![feature(iterator_try_collect)]
 
-extern crate test;
-
-use std::env;
 use std::time::SystemTime;
 
 macro_rules! days {
     ($($val:literal => $mod: ident),* $(,)?) => {
         $(
-            mod $mod;
+            pub mod $mod;
         )*
-        fn main() {
+        pub fn run(day: Option<usize>) {
             let start = SystemTime::now();
-            let day = env::args().nth(1).and_then(|s| s.parse::<usize>().ok());
             $(
                 #[allow(clippy::zero_prefixed_literal)]
                 if let None | Some($val) = day {

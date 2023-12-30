@@ -11,6 +11,9 @@ use crate::aoclib::Dir;
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
 
+/// # Panics
+///
+/// Panics if input is malformed.
 pub fn run() {
     println!(".Day 16");
 
@@ -26,12 +29,14 @@ pub fn run() {
     println!("')");
 }
 
-fn part_1(graph: &MirrorGraph) -> usize {
+#[must_use]
+pub fn part_1(graph: &MirrorGraph) -> usize {
     let mut shooter = LaserShooter::new(graph);
     shooter.shoot_laser(0, 0, Dir::E)
 }
 
-fn part_2(graph: &MirrorGraph) -> usize {
+#[must_use]
+pub fn part_2(graph: &MirrorGraph) -> usize {
     let mut shooter = LaserShooter::new(graph);
     let mut max = 0;
     for r in 0..graph.height {
@@ -252,36 +257,6 @@ impl<'a> LaserShooter<'a> {
     }
 }
 
-#[derive(Debug, Clone)]
-struct Node {
-    row: usize,
-    col: usize,
-    tile: Tile,
-    exits: DirMap<Option<usize>>,
-}
-
-impl Node {
-    fn new(row: usize, col: usize, tile: Tile) -> Self {
-        Self {
-            row,
-            col,
-            tile,
-            exits: DirMap::default(),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-struct MirrorGraph {
-    width: usize,
-    height: usize,
-    nodes: Vec<Node>,
-    from_north: Vec<Option<usize>>,
-    from_east: Vec<Option<usize>>,
-    from_south: Vec<Option<usize>>,
-    from_west: Vec<Option<usize>>,
-}
-
 #[derive(Debug, Clone, Copy)]
 struct Bitfield {
     width: usize,
@@ -329,6 +304,36 @@ impl Bitfield {
         // '--' col = 3
         1_u128 << (self.width - col - 1)
     }
+}
+
+#[derive(Debug, Clone)]
+struct Node {
+    row: usize,
+    col: usize,
+    tile: Tile,
+    exits: DirMap<Option<usize>>,
+}
+
+impl Node {
+    fn new(row: usize, col: usize, tile: Tile) -> Self {
+        Self {
+            row,
+            col,
+            tile,
+            exits: DirMap::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct MirrorGraph {
+    width: usize,
+    height: usize,
+    nodes: Vec<Node>,
+    from_north: Vec<Option<usize>>,
+    from_east: Vec<Option<usize>>,
+    from_south: Vec<Option<usize>>,
+    from_west: Vec<Option<usize>>,
 }
 
 impl FromStr for MirrorGraph {
@@ -434,32 +439,16 @@ impl TryFrom<u8> for Tile {
 }
 
 #[derive(Debug, Error)]
-enum ParseInputError {
+pub enum ParseInputError {
     #[error("Unexpected character: '{0}'")]
     InvalidChar(char),
 }
 
-#[cfg(test)]
-mod tests {
-    use std::hint::black_box;
+/// # Panics
+///
+/// Panics if input is malformed.
 
-    use super::*;
-    use test::Bencher;
-
-    #[bench]
-    fn run_parse_input(b: &mut Bencher) {
-        b.iter(|| black_box(INPUT.parse::<MirrorGraph>().expect("Parse input")));
-    }
-
-    #[bench]
-    fn run_part_1(b: &mut Bencher) {
-        let graph = INPUT.parse::<MirrorGraph>().expect("Parse input");
-        b.iter(|| black_box(part_1(&graph)));
-    }
-
-    #[bench]
-    fn run_part_2(b: &mut Bencher) {
-        let graph = INPUT.parse::<MirrorGraph>().expect("Parse input");
-        b.iter(|| black_box(part_2(&graph)));
-    }
+#[must_use]
+pub fn parse_test_input() -> MirrorGraph {
+    INPUT.parse().expect("Parse input")
 }

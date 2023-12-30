@@ -6,12 +6,15 @@ use std::hash::Hash;
 use std::str::FromStr;
 use thiserror::Error;
 
-use crate::aoclib::{Dir, Grid, Pos, CommonParseError};
+use crate::aoclib::{CommonParseError, Dir, Grid, Pos};
 
 const EXAMPLE1: &str = include_str!("example1.txt");
 const EXAMPLE2: &str = include_str!("example2.txt");
 const INPUT: &str = include_str!("input.txt");
 
+/// # Panics
+///
+/// Panics if input is malformed.
 pub fn run() {
     println!(".Day 17");
 
@@ -31,11 +34,13 @@ pub fn run() {
     println!("')");
 }
 
-fn part_1(input: &Input) -> usize {
+#[must_use]
+#[allow(clippy::cast_possible_wrap)]
+pub fn part_1(input: &Input) -> usize {
     let start = State::new(Pos::new(0, 0), Dir::E, true);
     let goal_pos = Pos::new(
-        isize::try_from(input.grid.height()).unwrap() - 1,
-        isize::try_from(input.grid.width()).unwrap() - 1,
+        input.grid.height() as isize - 1,
+        input.grid.width() as isize - 1,
     );
     let (_path, dist) = pathfinding::prelude::astar(
         &start,
@@ -43,16 +48,18 @@ fn part_1(input: &Input) -> usize {
         |n| n.pos.manhattan_distance(goal_pos),
         |n| n.pos.eq(&goal_pos),
     )
-    .unwrap();
+    .unwrap_or((vec![], 0));
 
     dist
 }
 
-fn part_2(input: &Input) -> usize {
+#[must_use]
+#[allow(clippy::cast_possible_wrap)]
+pub fn part_2(input: &Input) -> usize {
     let start = State::new(Pos::new(0, 0), Dir::E, true);
     let goal_pos = Pos::new(
-        isize::try_from(input.grid.height()).unwrap() - 1,
-        isize::try_from(input.grid.width()).unwrap() - 1,
+        input.grid.height() as isize - 1,
+        input.grid.width() as isize - 1,
     );
     let (_path, dist) = pathfinding::prelude::astar(
         &start,
@@ -60,7 +67,7 @@ fn part_2(input: &Input) -> usize {
         |n| n.pos.manhattan_distance(goal_pos),
         |n| n.pos.eq(&goal_pos),
     )
-    .unwrap();
+    .unwrap_or((vec![], 0));
 
     dist
 }
@@ -139,16 +146,16 @@ impl TryFrom<u8> for Cell {
 }
 
 #[derive(Debug, Clone)]
-struct Input {
+pub struct Input {
     grid: Grid<Cell>,
 }
 
 #[derive(Debug, Error)]
-enum ParseInputError {
+pub enum ParseInputError {
     #[error("Unexpected character: '{0}'")]
     InvalidChar(char),
     #[error("{0:?}")]
-    CommonError(#[from] CommonParseError)
+    CommonError(#[from] CommonParseError),
 }
 
 impl FromStr for Input {
@@ -160,27 +167,11 @@ impl FromStr for Input {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::hint::black_box;
+/// # Panics
+///
+/// Panics if input is malformed.
 
-    use super::*;
-    use test::Bencher;
-
-    #[bench]
-    fn run_parse_input(b: &mut Bencher) {
-        b.iter(|| black_box(INPUT.parse::<Input>().expect("Parse input")));
-    }
-
-    #[bench]
-    fn run_part_1(b: &mut Bencher) {
-        let input = INPUT.parse().expect("Parse input");
-        b.iter(|| black_box(part_1(&input)));
-    }
-
-    #[bench]
-    fn run_part_2(b: &mut Bencher) {
-        let input = INPUT.parse().expect("Parse input");
-        b.iter(|| black_box(part_2(&input)));
-    }
+#[must_use]
+pub fn parse_test_input() -> Input {
+    INPUT.parse().expect("Parse input")
 }

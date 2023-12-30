@@ -20,8 +20,8 @@ pub fn run() {
     println!("')");
 }
 
-#[allow(unused)]
-fn part_1(input: &[Input]) -> usize {
+#[must_use]
+pub fn part_1(input: &[Input]) -> usize {
     let mut sum = 0;
     for item in input {
         let first = item.line.bytes().find(u8::is_ascii_digit);
@@ -115,13 +115,12 @@ enum StateRev {
     // XIS 6 -
 }
 
-#[allow(unused)]
-fn part_2(input: &[Input]) -> usize {
+#[must_use]
+pub fn part_2(input: &[Input]) -> usize {
     let mut sum = 0;
     for item in input {
-        let mut line = item.line;
-        let first = match_forward(line);
-        let last = match_backward(line);
+        let first = match_forward(item.line);
+        let last = match_backward(item.line);
         if let (Some(first), Some(last)) = (first, last) {
             // println!("{line} -> {}", 10*first + last);
             sum += (10 * first + last) as usize;
@@ -220,7 +219,7 @@ fn match_backward(line: &str) -> Option<u8> {
 }
 
 #[derive(Debug, Clone)]
-struct Input<'a> {
+pub struct Input<'a> {
     line: &'a str,
 }
 
@@ -232,26 +231,7 @@ fn parse_input(text: &str) -> Vec<Input> {
     res
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use test::Bencher;
-
-
-    #[bench]
-    fn run_parse_input(b: &mut Bencher) {
-        b.iter(|| parse_input(INPUT));
-    }
-
-    #[bench]
-    fn run_part_1(b: &mut Bencher) {
-        let input = parse_input(INPUT);
-        b.iter(|| part_1(&input));
-    }
-
-    #[bench]
-    fn run_part_2(b: &mut Bencher) {
-        let input = parse_input(INPUT);
-        b.iter(|| part_2(&input));
-    }
+#[must_use]
+pub fn parse_test_input() -> Vec<Input<'static>> {
+    parse_input(INPUT)
 }

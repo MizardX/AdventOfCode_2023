@@ -3,7 +3,7 @@
 
 use std::fmt::Debug;
 use std::num::{ParseFloatError, ParseIntError};
-use std::ops::{Add, Index, IndexMut, Mul, Sub, Div};
+use std::ops::{Add, Div, Index, IndexMut, Mul, Sub};
 use std::str::FromStr;
 
 use num_traits::{Num, PrimInt};

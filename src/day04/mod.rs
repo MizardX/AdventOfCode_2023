@@ -19,7 +19,8 @@ pub fn run() {
 }
 
 #[allow(unused)]
-fn part_1(input: &[Card]) -> usize {
+#[must_use]
+pub fn part_1(input: &[Card]) -> usize {
     let mut sum = 0;
     for card in input {
         sum += card.score();
@@ -27,7 +28,8 @@ fn part_1(input: &[Card]) -> usize {
     sum
 }
 
-fn part_2(input: &[Card]) -> usize {
+#[must_use]
+pub fn part_2(input: &[Card]) -> usize {
     let mut counts = vec![1; input.len()];
     let mut sum = 0;
     for (i, c) in input.iter().enumerate() {
@@ -42,17 +44,17 @@ fn part_2(input: &[Card]) -> usize {
 
 #[allow(unused)]
 #[derive(Debug, Clone)]
-struct Card {
+pub struct Card {
     winning: u128,
     have: u128,
 }
 
 impl Card {
-    pub fn matches(&self) -> usize {
+    fn matches(&self) -> usize {
         (self.winning & self.have).count_ones() as _
     }
 
-    pub fn score(&self) -> usize {
+    fn score(&self) -> usize {
         match self.matches() {
             0 => 0,
             n => 1 << (n - 1),
@@ -80,27 +82,11 @@ fn parse_input(text: &str) -> Vec<Card> {
     res
 }
 
-#[cfg(test)]
-mod tests {
-    use std::hint::black_box;
+/// # Panics
+///
+/// Panics if input is malformed.
 
-    use super::*;
-    use test::Bencher;
-
-    #[bench]
-    fn run_parse_input(b: &mut Bencher) {
-        b.iter(|| black_box(parse_input(INPUT)));
-    }
-
-    #[bench]
-    fn run_part_1(b: &mut Bencher) {
-        let input = parse_input(INPUT);
-        b.iter(|| black_box(part_1(&input)));
-    }
-
-    #[bench]
-    fn run_part_2(b: &mut Bencher) {
-        let input = parse_input(INPUT);
-        b.iter(|| black_box(part_2(&input)));
-    }
+#[must_use]
+pub fn parse_test_input() -> Vec<Card> {
+    parse_input(INPUT)
 }

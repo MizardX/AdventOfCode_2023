@@ -10,6 +10,9 @@ const EXAMPLE1: &str = include_str!("example1.txt");
 const EXAMPLE2: &str = include_str!("example2.txt");
 const INPUT: &str = include_str!("input.txt");
 
+/// # Panics
+///
+/// Panics if input is malformed.
 pub fn run() {
     println!(".Day 20");
 
@@ -28,7 +31,8 @@ pub fn run() {
     println!("')");
 }
 
-fn part_1(input: &Circuit) -> usize {
+#[must_use]
+pub fn part_1(input: &Circuit) -> usize {
     let mut simulator = CircuitSimulator::new(input);
     for _ in 0..1000 {
         simulator.press_button_once();
@@ -36,7 +40,8 @@ fn part_1(input: &Circuit) -> usize {
     simulator.low_count * simulator.high_count
 }
 
-fn part_2(input: &Circuit) -> usize {
+#[must_use]
+pub fn part_2(input: &Circuit) -> usize {
     let mut simulator = CircuitSimulator::new(input);
     loop {
         simulator.press_button_once();
@@ -47,7 +52,7 @@ fn part_2(input: &Circuit) -> usize {
                 .flatten()
                 .copied()
                 .reduce(lcm)
-                .unwrap();
+                .unwrap_or(0);
         }
     }
 }
@@ -167,7 +172,7 @@ impl<'a> Gate<'a> {
 }
 
 #[derive(Debug, Clone)]
-struct Circuit<'a> {
+pub struct Circuit<'a> {
     modules: Vec<Gate<'a>>,
     button_index: usize,
     broadcast_index: usize,
@@ -229,7 +234,6 @@ impl<'a> TryFrom<&'a str> for Circuit<'a> {
             .map(|g: GateBuilder<'a>| g.build(&name_lookup))
             .try_collect()?;
 
-        
         for index in 0..gates.len() {
             for j in 0..gates[index].destinations.len() {
                 let dest_index = gates[index].destinations[j];
@@ -252,7 +256,7 @@ impl<'a> TryFrom<&'a str> for Circuit<'a> {
 }
 
 #[derive(Debug, Error)]
-enum ParseInputError<'a> {
+pub enum ParseInputError<'a> {
     #[error("Input is empty")]
     EmptyInput,
     #[error("Expected arrow")]
@@ -323,27 +327,11 @@ impl<'a> TryFrom<&'a str> for GateBuilder<'a> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::hint::black_box;
+/// # Panics
+///
+/// Panics if input is malformed.
 
-    use super::*;
-    use test::Bencher;
-
-    #[bench]
-    fn run_parse_input(b: &mut Bencher) {
-        b.iter(|| black_box(Circuit::try_from(INPUT).expect("Parse input")));
-    }
-
-    #[bench]
-    fn run_part_1(b: &mut Bencher) {
-        let input = Circuit::try_from(INPUT).expect("Parse input");
-        b.iter(|| black_box(part_1(&input)));
-    }
-
-    #[bench]
-    fn run_part_2(b: &mut Bencher) {
-        let input = Circuit::try_from(INPUT).expect("Parse input");
-        b.iter(|| black_box(part_2(&input)));
-    }
+#[must_use]
+pub fn parse_test_input() -> Circuit<'static> {
+    Circuit::try_from(INPUT).expect("Parse input")
 }

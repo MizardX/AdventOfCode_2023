@@ -6,8 +6,112 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+divan = "0.1.8"
 num-traits = "0.2.17"
 pathfinding = "4.6.0"
 rand = "0.8.5"
 smallvec = { version = "1.11.2", features = ["const_generics"] }
 thiserror = "1.0.50"
+
+[[bin]]
+name = "main"
+
+[[bench]]
+name = "day01"
+harness = false
+
+[[bench]]
+name = "day02"
+harness = false
+
+[[bench]]
+name = "day03"
+harness = false
+
+[[bench]]
+name = "day04"
+harness = false
+
+[[bench]]
+name = "day05"
+harness = false
+
+[[bench]]
+name = "day06"
+harness = false
+
+[[bench]]
+name = "day07"
+harness = false
+
+[[bench]]
+name = "day08"
+harness = false
+
+[[bench]]
+name = "day09"
+harness = false
+
+[[bench]]
+name = "day10"
+harness = false
+
+[[bench]]
+name = "day11"
+harness = false
+
+[[bench]]
+name = "day12"
+harness = false
+
+[[bench]]
+name = "day13"
+harness = false
+
+[[bench]]
+name = "day14"
+harness = false
+
+[[bench]]
+name = "day15"
+harness = false
+
+[[bench]]
+name = "day16"
+harness = false
+
+[[bench]]
+name = "day17"
+harness = false
+
+[[bench]]
+name = "day18"
+harness = false
+
+[[bench]]
+name = "day19"
+harness = false
+
+[[bench]]
+name = "day20"
+harness = false
+
+[[bench]]
+name = "day21"
+harness = false
+
+[[bench]]
+name = "day22"
+harness = false
+
+[[bench]]
+name = "day23"
+harness = false
+
+[[bench]]
+name = "day24"
+harness = false
+
+[[bench]]
+name = "day25"
+harness = false

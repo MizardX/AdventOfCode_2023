@@ -8,6 +8,9 @@ use thiserror::Error;
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
 
+/// # Panics
+///
+/// Panics if input is malformed.
 pub fn run() {
     println!(".Day 15");
 
@@ -23,7 +26,8 @@ pub fn run() {
     println!("')");
 }
 
-fn part_1(input: &Input) -> usize {
+#[must_use]
+pub fn part_1(input: &Input) -> usize {
     let mut sum = 0;
     for item in &input.steps {
         sum += item.init_hash as usize;
@@ -31,7 +35,8 @@ fn part_1(input: &Input) -> usize {
     sum
 }
 
-fn part_2(input: &Input) -> usize {
+#[must_use]
+pub fn part_2(input: &Input) -> usize {
     let mut lens_boxes: SmallVec<[LensBox; 256]> = smallvec![LensBox::default(); 256];
 
     for step in &input.steps {
@@ -133,18 +138,18 @@ impl TryFrom<&[u8]> for Step {
 }
 
 #[derive(Debug, Clone)]
-struct Input {
+pub struct Input {
     steps: Vec<Step>,
 }
 
 impl Input {
-    pub fn new(steps: Vec<Step>) -> Self {
+    fn new(steps: Vec<Step>) -> Self {
         Self { steps }
     }
 }
 
 #[derive(Debug, Error)]
-enum ParseInputError {
+pub enum ParseInputError {
     #[error("Missing operation indicator")]
     MissingOperation,
 }
@@ -161,27 +166,11 @@ impl FromStr for Input {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::hint::black_box;
+/// # Panics
+///
+/// Panics if input is malformed.
 
-    use super::*;
-    use test::Bencher;
-
-    #[bench]
-    fn run_parse_input(b: &mut Bencher) {
-        b.iter(|| black_box(Input::from_str(INPUT))); //.expect("Parse input")));
-    }
-
-    #[bench]
-    fn run_part_1(b: &mut Bencher) {
-        let input = Input::from_str(INPUT).expect("Parse input");
-        b.iter(|| black_box(part_1(&input)));
-    }
-
-    #[bench]
-    fn run_part_2(b: &mut Bencher) {
-        let input = Input::from_str(INPUT).expect("Parse input");
-        b.iter(|| black_box(part_2(&input)));
-    }
+#[must_use]
+pub fn parse_test_input() -> Input {
+    INPUT.parse().expect("Parse input")
 }

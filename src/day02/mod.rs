@@ -9,6 +9,9 @@ use thiserror::Error;
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
 
+/// # Panics
+///
+/// Panics if input is malformed.
 pub fn run() {
     println!(".Day 02");
 
@@ -24,8 +27,8 @@ pub fn run() {
     println!("')");
 }
 
-#[allow(unused)]
-fn part_1(input: &Input) -> usize {
+#[must_use]
+pub fn part_1(input: &Input) -> usize {
     input
         .games
         .iter()
@@ -34,8 +37,8 @@ fn part_1(input: &Input) -> usize {
         .sum()
 }
 
-#[allow(unused)]
-fn part_2(input: &Input) -> usize {
+#[must_use]
+pub fn part_2(input: &Input) -> usize {
     input
         .games
         .iter()
@@ -44,14 +47,14 @@ fn part_2(input: &Input) -> usize {
                 .iter()
                 .copied()
                 .reduce(Round::max_components)
-                .unwrap()
+                .unwrap_or(Round::new())
                 .power()
         })
         .sum()
 }
 
 #[derive(Debug, Clone)]
-struct Input {
+pub struct Input {
     games: Vec<Game>,
 }
 
@@ -95,7 +98,7 @@ impl Round {
 }
 
 #[derive(Debug, Error)]
-enum ParseInputError {
+pub enum ParseInputError {
     #[error("Expected character: {0:?}")]
     Expected(char),
     #[error("Expected number: {0:?}")]
@@ -152,27 +155,10 @@ impl FromStr for Input {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::hint::black_box;
-
-    use super::*;
-    use test::Bencher;
-
-    #[bench]
-    fn run_parse_input(b: &mut Bencher) {
-        b.iter(|| black_box(INPUT.parse::<Input>()));
-    }
-
-    #[bench]
-    fn run_part_1(b: &mut Bencher) {
-        let input = INPUT.parse().expect("Parse input");
-        b.iter(|| black_box(part_1(&input)));
-    }
-
-    #[bench]
-    fn run_part_2(b: &mut Bencher) {
-        let input = INPUT.parse().expect("Parse input");
-        b.iter(|| black_box(part_2(&input)));
-    }
+/// # Panics
+///
+/// Panics if input is malformed.
+#[must_use]
+pub fn parse_test_input() -> Input {
+    INPUT.parse().expect("Parse input")
 }

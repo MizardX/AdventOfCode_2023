@@ -8,6 +8,9 @@ use thiserror::Error;
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
 
+/// # Panics
+///
+/// Panics if input is malformed.
 pub fn run() {
     println!(".Day 13");
 
@@ -23,7 +26,8 @@ pub fn run() {
     println!("')");
 }
 
-fn part_1(input: &Input) -> usize {
+#[must_use]
+pub fn part_1(input: &Input) -> usize {
     let mut sum = 0;
     for item in &input.patterns {
         if let Some(r) = find_mirror_with_smudges::<0>(&item.row_masks) {
@@ -36,7 +40,8 @@ fn part_1(input: &Input) -> usize {
     sum
 }
 
-fn part_2(input: &Input) -> usize {
+#[must_use]
+pub fn part_2(input: &Input) -> usize {
     let mut sum = 0;
     for item in &input.patterns {
         if let Some(r) = find_mirror_with_smudges::<1>(&item.row_masks) {
@@ -72,12 +77,12 @@ struct Pattern {
     col_masks: SmallVec<[u32; 20]>,
 }
 
-struct Input {
+pub struct Input {
     patterns: Vec<Pattern>,
 }
 
 #[derive(Debug, Error)]
-enum ParseInputError {
+pub enum ParseInputError {
     #[error("Unexpected character: '{0}'")]
     InvalidChar(char),
     #[error("Uneven row lengths; Expected {0} got {1}")]
@@ -160,27 +165,11 @@ impl PatternParser {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::hint::black_box;
+/// # Panics
+///
+/// Panics if input is malformed.
 
-    use super::*;
-    use test::Bencher;
-
-    #[bench]
-    fn run_parse_input(b: &mut Bencher) {
-        b.iter(|| black_box(INPUT.parse::<Input>().expect("Parse input")));
-    }
-
-    #[bench]
-    fn run_part_1(b: &mut Bencher) {
-        let input = INPUT.parse().expect("Parse input");
-        b.iter(|| black_box(part_1(&input)));
-    }
-
-    #[bench]
-    fn run_part_2(b: &mut Bencher) {
-        let input = INPUT.parse().expect("Parse input");
-        b.iter(|| black_box(part_2(&input)));
-    }
+#[must_use]
+pub fn parse_test_input() -> Input {
+    INPUT.parse().expect("Parse input")
 }

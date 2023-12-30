@@ -12,6 +12,9 @@ use crate::aoclib::{CommonParseError, Dir, Grid, Pos};
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
 
+/// # Panics
+///
+/// Panics if input is malformed.
 pub fn run() {
     println!(".Day 23");
 
@@ -27,23 +30,24 @@ pub fn run() {
     println!("')");
 }
 
-fn part_1(graph: &Graph) -> usize {
-    println!("{graph:?}");
+#[must_use]
+pub fn part_1(graph: &Graph) -> usize {
     graph.longest_path::<true>()
 }
 
-fn part_2(graph: &Graph) -> usize {
+#[must_use]
+pub fn part_2(graph: &Graph) -> usize {
     graph.longest_path::<false>()
 }
 
-struct Graph {
+pub struct Graph {
     nodes: Vec<Node>,
     start_ix: usize,
     goal_ix: usize,
 }
 
 impl Graph {
-    pub fn len(&self) -> usize {
+    fn len(&self) -> usize {
         self.nodes.len()
     }
 
@@ -318,14 +322,14 @@ impl TryFrom<u8> for Tile {
 }
 
 #[derive(Debug, Clone)]
-struct Map {
+pub struct Map {
     grid: Grid<Tile>,
     start: Pos,
     goal: Pos,
 }
 
 impl Map {
-    pub fn neighbors(&self, pos: Pos) -> impl Deref<Target = [(Dir, Pos, EdgeDirection)]> {
+    fn neighbors(&self, pos: Pos) -> impl Deref<Target = [(Dir, Pos, EdgeDirection)]> {
         match self.grid.get(pos) {
             // Current is not a valid tile
             None | Some(Tile::Blocked) => smallvec![],
@@ -420,40 +424,23 @@ impl BitAnd for EdgeDirection {
 }
 
 #[derive(Debug, Error)]
-enum ParseInputError {
+pub enum ParseInputError {
     #[error("Unexpected character: '{0}'")]
     InvalidChar(char),
     #[error("{0:?}")]
     CommonError(#[from] CommonParseError),
 }
 
-#[cfg(test)]
-mod tests {
-    use std::hint::black_box;
+/// # Panics
+///
+/// Panics if input is malformed.
 
-    use super::*;
-    use test::Bencher;
+#[must_use]
+pub fn parse_test_input() -> Map {
+    INPUT.parse::<Map>().expect("Parse input")
+}
 
-    #[bench]
-    fn run_a_parse_input(b: &mut Bencher) {
-        b.iter(|| black_box(Graph::from(&INPUT.parse::<Map>().expect("Parse input"))));
-    }
-
-    #[bench]
-    fn run_b_transform_input(b: &mut Bencher) {
-        let map = INPUT.parse::<Map>().expect("Parse input");
-        b.iter(|| black_box(Graph::from(&map)));
-    }
-
-    #[bench]
-    fn run_c_part_1(b: &mut Bencher) {
-        let input = Graph::from(&INPUT.parse::<Map>().expect("Parse input"));
-        b.iter(|| black_box(part_1(&input)));
-    }
-
-    #[bench]
-    fn run_d_part_2(b: &mut Bencher) {
-        let input = Graph::from(&INPUT.parse::<Map>().expect("Parse input"));
-        b.iter(|| black_box(part_2(&input)));
-    }
+#[must_use]
+pub fn transform_test_input(input: &Map) -> Graph {
+    Graph::from(input)
 }

@@ -11,6 +11,9 @@ use thiserror::Error;
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
 
+/// # Panics
+///
+/// Panics if input is malformed.
 pub fn run() {
     println!(".Day 25");
 
@@ -24,7 +27,8 @@ pub fn run() {
     println!("')");
 }
 
-fn part_1(input: &WiringDiagram) -> usize {
+#[must_use]
+pub fn part_1(input: &WiringDiagram) -> usize {
     let mut karger = Karger::new(input);
     let (a, b) = karger.run_to_completion();
     a * b
@@ -182,7 +186,7 @@ impl<'a> Debug for Nodes<'a> {
 }
 
 #[derive(Debug, Clone)]
-struct WiringDiagram<'a> {
+pub struct WiringDiagram<'a> {
     components: Vec<&'a str>,
     edges: Vec<[usize; 2]>,
 }
@@ -225,33 +229,26 @@ impl<'a> TryFrom<&'a str> for WiringDiagram<'a> {
 }
 
 #[derive(Debug, Error)]
-enum ParseInputError {
+pub enum ParseInputError {
     #[error("Expected character: '{0}'")]
     ExpectedChar(char),
 }
 
-#[cfg(test)]
-mod tests {
-    use std::hint::black_box;
+/// # Panics
+///
+/// Panics if input is malformed.
 
-    use super::*;
-    use test::Bencher;
+#[must_use]
+pub fn parse_test_input() -> WiringDiagram<'static> {
+    INPUT.try_into().expect("Parse input")
+}
 
-    #[bench]
-    fn run_1_parse_input(b: &mut Bencher) {
-        b.iter(|| black_box(WiringDiagram::try_from(INPUT).expect("Parse input")));
+#[must_use]
+pub fn run_cycles(input: &WiringDiagram, cycles: usize) -> usize {
+    let mut kerger = Karger::new(input);
+    let mut sum = 0;
+    for _ in 0..cycles {
+        sum += kerger.single_cycle();
     }
-
-    #[bench]
-    fn run_2_single_cycle(b: &mut Bencher) {
-        let input = INPUT.try_into().expect("Parse input");
-        let mut karger = Karger::new(&input);
-        b.iter(|| black_box(karger.single_cycle()));
-    }
-
-    #[bench]
-    fn run_3_full(b: &mut Bencher) {
-        let input = INPUT.try_into().expect("Parse input");
-        b.iter(|| black_box(part_1(&input)));
-    }
+    sum
 }

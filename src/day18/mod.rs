@@ -9,6 +9,9 @@ use crate::aoclib::{Dir, MultiDir, Pos};
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
 
+/// # Panics
+///
+/// Panics if input is malformed.
 pub fn run() {
     println!(".Day 18");
 
@@ -20,15 +23,20 @@ pub fn run() {
     println!("++Input");
     let input = INPUT.parse().expect("Parse input");
     println!("|+-Part 1: {} (expected 47 139)", part_1(&input));
-    println!("|'-Part 2: {} (expected 173 152 345 887 206)", part_2(&input));
+    println!(
+        "|'-Part 2: {} (expected 173 152 345 887 206)",
+        part_2(&input)
+    );
     println!("')");
 }
 
-fn part_1(input: &Input) -> i64 {
+#[must_use]
+pub fn part_1(input: &Input) -> i64 {
     sum_enclosed_area(input.instructions.iter().map(|instr| instr.movement))
 }
 
-fn part_2(input: &Input) -> i64 {
+#[must_use]
+pub fn part_2(input: &Input) -> i64 {
     sum_enclosed_area(input.instructions.iter().map(|instr| instr.alt_movement))
 }
 
@@ -120,12 +128,12 @@ impl FromStr for Instruction {
 }
 
 #[derive(Debug, Clone)]
-struct Input {
+pub struct Input {
     instructions: Vec<Instruction>,
 }
 
 #[derive(Debug, Error)]
-enum ParseInputError {
+pub enum ParseInputError {
     #[error("Input is empty")]
     EmptyInput,
     #[error("Unexpected character: '{0}'")]
@@ -141,27 +149,11 @@ impl FromStr for Input {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::hint::black_box;
+/// # Panics
+///
+/// Panics if input is malformed.
 
-    use super::*;
-    use test::Bencher;
-
-    #[bench]
-    fn run_parse_input(b: &mut Bencher) {
-        b.iter(|| black_box(INPUT.parse::<Input>().expect("Parse input")));
-    }
-
-    #[bench]
-    fn run_part_1(b: &mut Bencher) {
-        let input = INPUT.parse().expect("Parse input");
-        b.iter(|| black_box(part_1(&input)));
-    }
-
-    #[bench]
-    fn run_part_2(b: &mut Bencher) {
-        let input = INPUT.parse().expect("Parse input");
-        b.iter(|| black_box(part_2(&input)));
-    }
+#[must_use]
+pub fn parse_test_input() -> Input {
+    INPUT.parse().expect("Parse input")
 }

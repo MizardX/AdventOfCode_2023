@@ -5,11 +5,14 @@ use std::fmt::Debug;
 use std::str::FromStr;
 use thiserror::Error;
 
-use crate::aoclib::{Dir, Grid, Pos, RepeatingGrid, CommonParseError};
+use crate::aoclib::{CommonParseError, Dir, Grid, Pos, RepeatingGrid};
 
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
 
+/// # Panics
+///
+/// Panics if input is malformed.
 pub fn run() {
     println!(".Day 21");
 
@@ -39,11 +42,13 @@ pub fn run() {
     println!("')");
 }
 
-fn part_1(garden: &Garden, target_dist: usize) -> i64 {
+#[must_use]
+pub fn part_1(garden: &Garden, target_dist: usize) -> i64 {
     plots_after_steps(garden, target_dist)
 }
 
-fn part_2(garden: &Garden, target_dist: usize) -> i64 {
+#[must_use]
+pub fn part_2(garden: &Garden, target_dist: usize) -> i64 {
     plots_after_steps(garden, target_dist)
 }
 
@@ -149,7 +154,7 @@ impl TryFrom<u8> for Tile {
 }
 
 #[derive(Debug, Clone)]
-struct Garden {
+pub struct Garden {
     grid: Grid<Tile>,
     start_pos: Pos,
 }
@@ -161,11 +166,11 @@ impl Garden {
 }
 
 #[derive(Debug, Error)]
-enum ParseInputError {
+pub enum ParseInputError {
     #[error("Unexpected character: '{0}'")]
     InvalidChar(char),
     #[error("{0:?}")]
-    CommonError(#[from] CommonParseError)
+    CommonError(#[from] CommonParseError),
 }
 
 impl FromStr for Garden {
@@ -179,27 +184,11 @@ impl FromStr for Garden {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::hint::black_box;
+/// # Panics
+///
+/// Panics if input is malformed.
 
-    use super::*;
-    use test::Bencher;
-
-    #[bench]
-    fn run_parse_input(b: &mut Bencher) {
-        b.iter(|| black_box(INPUT.parse::<Garden>().expect("Parse input")));
-    }
-
-    #[bench]
-    fn run_part_1(b: &mut Bencher) {
-        let input = INPUT.parse().expect("Parse input");
-        b.iter(|| black_box(part_1(&input, 64)));
-    }
-
-    #[bench]
-    fn run_part_2(b: &mut Bencher) {
-        let input = INPUT.parse().expect("Parse input");
-        b.iter(|| black_box(part_2(&input, 26_501_365)));
-    }
+#[must_use]
+pub fn parse_test_input() -> Garden {
+    INPUT.parse().expect("Parse input")
 }

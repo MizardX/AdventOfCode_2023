@@ -7,6 +7,9 @@ use thiserror::Error;
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
 
+/// # Panics
+///
+/// Panics if input is malformed.
 pub fn run() {
     println!(".Day 14");
 
@@ -22,7 +25,8 @@ pub fn run() {
     println!("')");
 }
 
-fn part_1(input: &Input) -> usize {
+#[must_use]
+pub fn part_1(input: &Input) -> usize {
     let mut input = input.clone();
     input.tilt_north();
     input.north_load()
@@ -31,7 +35,8 @@ fn part_1(input: &Input) -> usize {
 const HASH_MODULO: usize = 2801;
 const HASH_FACTOR: usize = 19;
 
-fn part_2(input: &Input) -> usize {
+#[must_use]
+pub fn part_2(input: &Input) -> usize {
     let mut input = input.clone();
     let mut seen = [None; HASH_MODULO];
     let mut step = 0;
@@ -53,7 +58,7 @@ fn part_2(input: &Input) -> usize {
 }
 
 #[derive(Debug, Clone)]
-struct Input {
+pub struct Input {
     width: usize,
     height: usize,
     tiles: Vec<Tile>,
@@ -199,7 +204,7 @@ impl Display for Input {
 }
 
 #[derive(Debug, Error)]
-enum ParseInputError {
+pub enum ParseInputError {
     #[error("Input is empty")]
     EmptyInput,
     #[error("Rows of input is uneven")]
@@ -269,27 +274,11 @@ impl TryFrom<u8> for Tile {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use std::hint::black_box;
+/// # Panics
+///
+/// Panics if input is malformed.
 
-    use super::*;
-    use test::Bencher;
-
-    #[bench]
-    fn run_parse_input(b: &mut Bencher) {
-        b.iter(|| black_box(INPUT.parse::<Input>().expect("Parse input")));
-    }
-
-    #[bench]
-    fn run_part_1(b: &mut Bencher) {
-        let input = INPUT.parse().expect("Parse input");
-        b.iter(|| black_box(part_1(&input)));
-    }
-
-    #[bench]
-    fn run_part_2(b: &mut Bencher) {
-        let input = INPUT.parse().expect("Parse input");
-        b.iter(|| black_box(part_2(&input)));
-    }
+#[must_use]
+pub fn parse_test_input() -> Input {
+    INPUT.parse().expect("Parse input")
 }
