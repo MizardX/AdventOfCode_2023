@@ -71,13 +71,12 @@ pub fn part_2(input: &Input) -> u64 {
 fn distance_to_end(input: &Input, start_ix: usize) -> usize {
     let mut ix = start_ix;
     for (i, mov) in input.instructions.iter().copied().cycle().enumerate() {
-        let node = &input.nodes[ix];
-        if node.is_end {
+        if input.nodes[ix].is_end {
             return i;
         }
         ix = match mov {
-            Dir::Left => node.left_ix,
-            Dir::Right => node.right_ix,
+            Dir::Left => input.nodes[ix].left_ix,
+            Dir::Right => input.nodes[ix].right_ix,
         };
     }
     unreachable!()
@@ -143,50 +142,64 @@ impl FromStr for Input {
     type Err = ParseInputError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        fn hash(s: &str) -> usize {
-            let b = s.as_bytes();
-            let c1 = b[0] as usize % 26;
-            let c2 = b[1] as usize % 26;
-            let c3 = b[2] as usize % 26;
-            c1 * 676 + c2 * 26 + c3
+        fn hash(s: &[u8]) -> usize {
+            match s {
+                &[b1, b2, b3] => {
+                    (((b1 as usize) << 10) + ((b2 as usize) << 5) + (b3 as usize)) & 0x7FFF
+                }
+                _ => unreachable!(),
+            }
         }
 
-        let mut lines = s.lines();
+        let mut lines = s.as_bytes().split(|&ch| ch == b'\n');
         let instructions = lines
             .next()
             .ok_or(ParseInputError::EmptyInput)?
-            .bytes()
+            .trim_ascii_end()
+            .iter()
+            .copied()
             .map(Dir::try_from)
             .collect::<Result<Vec<_>, _>>()?;
         match lines.next() {
-            Some("") => (),
+            Some([] | b"\r") => (),
             _ => return Err(ParseInputError::MissingSeparatorLine),
         };
 
-        let mut nodes = vec![Node::default(); 17576];
+        let mut nodes = vec![Node::default(); 0x8000];
         let mut start_ix = usize::MAX;
         let mut end_ix = usize::MAX;
         let mut start_ixs = Vec::new();
-        for line in lines.clone() {
-            let (name, line) = line
-                .split_once(" = (")
-                .ok_or(ParseInputError::NodeSyntaxError)?;
-            let (left, line) = line
-                .split_once(", ")
-                .ok_or(ParseInputError::NodeSyntaxError)?;
-            let right = line
-                .strip_suffix(')')
-                .ok_or(ParseInputError::NodeSyntaxError)?;
+        for line in lines {
+            let line = line.trim_ascii_end();
+            // AAA = (BBB, CCC)
+            if line.len() != 16 {
+                return Err(ParseInputError::NodeSyntaxError);
+            }
+            let name = &line[0..3];
+            #[cfg(debug_assertions)]
+            if &line[3..7] != b" = (" {
+                return Err(ParseInputError::NodeSyntaxError);
+            }
+            let left = &line[7..10];
+            #[cfg(debug_assertions)]
+            if &line[10..12] != b", " {
+                return Err(ParseInputError::NodeSyntaxError);
+            }
+            let right = &line[12..15];
+            #[cfg(debug_assertions)]
+            if &line[15..] != b")" {
+                return Err(ParseInputError::NodeSyntaxError);
+            }
 
             let mut node = Node::new(hash(left), hash(right));
             let ix = hash(name);
-            if name.ends_with('A') {
-                if name == "AAA" {
+            if name[2] == b'A' {
+                if name == b"AAA" {
                     start_ix = ix;
                 }
                 start_ixs.push(ix);
-            } else if name.ends_with('Z') {
-                if name == "ZZZ" {
+            } else if name[2] == b'Z' {
+                if name == b"ZZZ" {
                     end_ix = ix;
                 }
                 node.is_end = true;
