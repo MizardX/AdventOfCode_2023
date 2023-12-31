@@ -1,5 +1,6 @@
-use std::num::ParseIntError;
-use std::str::{FromStr, Utf8Error};
+use bstr::ByteSlice;
+use bstr_parse::BStrParse;
+use std::str::FromStr;
 
 use smallvec::SmallVec;
 use thiserror::Error;
@@ -108,10 +109,8 @@ impl Round {
 pub enum ParseInputError {
     #[error("Expected character: {0:?}")]
     Expected(char),
-    #[error("Expected number: {0:?}")]
-    InvalidNumber(#[from] ParseIntError),
-    #[error("UTF-8 error")]
-    EncodingError(#[from] Utf8Error),
+    #[error(transparent)]
+    InvalidNumber(#[from] bstr_parse::ParseIntError),
 }
 
 impl TryFrom<&[u8]> for Round {
@@ -124,7 +123,7 @@ impl TryFrom<&[u8]> for Round {
                 .trim_ascii_start()
                 .split_once(|&ch| ch == b' ')
                 .ok_or(ParseInputError::Expected(' '))?;
-            let num = std::str::from_utf8(num_str)?.parse::<u8>()?;
+            let num = num_str.parse::<u8>()?;
             match color_str[0] {
                 b'r' => res.red += num,
                 b'g' => res.green += num,
@@ -144,7 +143,8 @@ impl TryFrom<&[u8]> for Game {
         let (id_str, line) = line
             .split_once(|&ch| ch == b':')
             .ok_or(ParseInputError::Expected(':'))?;
-        let id = std::str::from_utf8(id_str)?.parse::<usize>()?;
+        let id = id_str
+            .parse::<usize>()?;
         let mut rounds = SmallVec::new();
         for round_str in line.split(|&ch| ch == b';') {
             let round = round_str.try_into()?;
@@ -159,8 +159,7 @@ impl FromStr for Input {
 
     fn from_str(text: &str) -> Result<Input, Self::Err> {
         let mut games: Vec<Game> = Vec::new();
-        for line in text.as_bytes().split(|&ch| ch == b'\n') {
-            let line = line.trim_ascii_end();
+        for line in text.as_bytes().lines() {
             games.push(line.try_into()?);
         }
         Ok(Self { games })
