@@ -34,10 +34,26 @@ pub fn profile() {
 pub fn part_1(input: &[Input]) -> usize {
     let mut sum = 0;
     for item in input {
-        let first = item.line.bytes().find(u8::is_ascii_digit);
-        let last = item.line.bytes().rev().find(u8::is_ascii_digit);
-        if let (Some(first), Some(last)) = (first, last) {
-            sum += 10 * (first - b'0') as usize + (last - b'0') as usize;
+        let mut first = None;
+        for ch in item.line.bytes() {
+            first = Some(match ch {
+                b'0'..=b'9' => ch,
+                _ => continue,
+            });
+            break;
+        }
+        if let Some(first) = first {
+            let mut last = None;
+            for ch in item.line.bytes().rev() {
+                last = Some(match ch {
+                    b'0'..=b'9' => ch,
+                    _ => continue,
+                });
+                break;
+            }
+            if let Some(last) = last {
+                sum += 10 * (first - b'0') as usize + (last - b'0') as usize;
+            }
         }
     }
     sum
@@ -129,11 +145,10 @@ enum StateRev {
 pub fn part_2(input: &[Input]) -> usize {
     let mut sum = 0;
     for item in input {
-        let first = match_forward(item.line);
-        let last = match_backward(item.line);
-        if let (Some(first), Some(last)) = (first, last) {
-            // println!("{line} -> {}", 10*first + last);
-            sum += (10 * first + last) as usize;
+        if let Some(first) = match_forward(item.line) {
+            if let Some(last) = match_backward(item.line) {
+                sum += (10 * first + last) as usize;
+            }
         }
     }
     sum
@@ -141,7 +156,7 @@ pub fn part_2(input: &[Input]) -> usize {
 
 fn match_forward(line: &str) -> Option<u8> {
     let mut state = State::Start;
-    for &ch in line.as_bytes() {
+    for ch in line.bytes() {
         state = match (state, ch) {
             (_, b @ b'0'..=b'9') => return Some(b - b'0'),
             (State::O | State::Fo, b'n') => State::On,
