@@ -1,3 +1,5 @@
+use bstr::ByteSlice;
+
 const EXAMPLE1: &str = include_str!("example1.txt");
 const EXAMPLE2: &str = include_str!("example2.txt");
 const INPUT: &str = include_str!("input.txt");
@@ -35,7 +37,7 @@ pub fn part_1(input: &[Input]) -> usize {
     let mut sum = 0;
     for item in input {
         let mut first = None;
-        for ch in item.line.bytes() {
+        for ch in item.line {
             first = Some(match ch {
                 b'0'..=b'9' => ch,
                 _ => continue,
@@ -44,7 +46,7 @@ pub fn part_1(input: &[Input]) -> usize {
         }
         if let Some(first) = first {
             let mut last = None;
-            for ch in item.line.bytes().rev() {
+            for ch in item.line.iter().copied().rev() {
                 last = Some(match ch {
                     b'0'..=b'9' => ch,
                     _ => continue,
@@ -154,9 +156,9 @@ pub fn part_2(input: &[Input]) -> usize {
     sum
 }
 
-fn match_forward(line: &str) -> Option<u8> {
+fn match_forward(line: &[u8]) -> Option<u8> {
     let mut state = State::Start;
-    for ch in line.bytes() {
+    for ch in line {
         state = match (state, ch) {
             (_, b @ b'0'..=b'9') => return Some(b - b'0'),
             (State::O | State::Fo, b'n') => State::On,
@@ -198,11 +200,9 @@ fn match_forward(line: &str) -> Option<u8> {
     None
 }
 
-fn match_backward(line: &str) -> Option<u8> {
-    //println!("LINE: {line}");
+fn match_backward(line: &[u8]) -> Option<u8> {
     let mut state = StateRev::Start;
-    for ch in line.bytes().rev() {
-        //println!("  {state:?} + {}", ch as char);
+    for ch in line.iter().copied().rev() {
         state = match (state, ch) {
             (_, b @ b'0'..=b'9') => return Some(b - b'0'),
             (StateRev::E | StateRev::Ee | StateRev::Ne | StateRev::Neve, b'e') => StateRev::Ee,
@@ -245,12 +245,12 @@ fn match_backward(line: &str) -> Option<u8> {
 
 #[derive(Debug, Clone)]
 pub struct Input<'a> {
-    line: &'a str,
+    line: &'a [u8],
 }
 
 fn parse_input(text: &str) -> Vec<Input> {
     let mut res: Vec<Input> = Vec::new();
-    for line in text.lines() {
+    for line in text.as_bytes().lines() {
         res.push(Input { line });
     }
     res
