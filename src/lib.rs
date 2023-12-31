@@ -3,6 +3,8 @@
 #![feature(step_trait)]
 #![feature(array_windows)]
 #![feature(iterator_try_collect)]
+#![feature(slice_split_once)]
+#![feature(byte_slice_trim_ascii)]
 
 #![warn(clippy::pedantic)]
 #![allow(clippy::missing_panics_doc)]
