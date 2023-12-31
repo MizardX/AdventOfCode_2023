@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use bstr::ByteSlice;
 use thiserror::Error;
 
 use crate::aoclib::lcm;
@@ -151,26 +152,24 @@ impl FromStr for Input {
             }
         }
 
-        let mut lines = s.as_bytes().split(|&ch| ch == b'\n');
+        let mut lines = s.as_bytes().lines();
         let instructions = lines
             .next()
             .ok_or(ParseInputError::EmptyInput)?
-            .trim_ascii_end()
             .iter()
             .copied()
             .map(Dir::try_from)
             .collect::<Result<Vec<_>, _>>()?;
         match lines.next() {
-            Some([] | b"\r") => (),
+            Some([]) => (),
             _ => return Err(ParseInputError::MissingSeparatorLine),
         };
 
-        let mut nodes = vec![Node::default(); 0x8000];
+        let mut nodes = vec![Node::default(); 1 << 15];
         let mut start_ix = usize::MAX;
         let mut end_ix = usize::MAX;
         let mut start_ixs = Vec::new();
         for line in lines {
-            let line = line.trim_ascii_end();
             // AAA = (BBB, CCC)
             if line.len() != 16 {
                 return Err(ParseInputError::NodeSyntaxError);
