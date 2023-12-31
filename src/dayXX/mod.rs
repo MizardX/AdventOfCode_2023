@@ -1,5 +1,3 @@
-#![warn(clippy::pedantic)]
-
 use std::str::FromStr;
 use thiserror::Error;
 
@@ -22,12 +20,26 @@ pub fn run() {
 }
 
 #[must_use]
-pub fn part_1(_input: &Input) -> usize {
-    0
+pub fn parse_test_input() -> Input {
+    INPUT.parse().expect("Parse input")
+}
+
+pub fn profile() {
+    use std::hint::black_box;
+    let input = parse_test_input();
+    black_box(part_1(&input));
+    black_box(part_2(&input));
 }
 
 #[must_use]
-pub fn part_2(_input: &Input) -> usize {
+pub fn part_1(input: &Input) -> usize {
+    let _ = input;
+    todo!()
+}
+
+#[must_use]
+pub fn part_2(input: &Input) -> usize {
+    let _ = input;
     0
 }
 
@@ -48,9 +60,4 @@ impl FromStr for Input {
     fn from_str(_text: &str) -> Result<Self, Self::Err> {
         todo!()
     }
-}
-
-#[must_use]
-pub fn parse_test_input() -> Input {
-    INPUT.parse().expect("Parse input")
 }

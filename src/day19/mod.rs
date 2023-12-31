@@ -1,5 +1,3 @@
-#![warn(clippy::pedantic)]
-
 use smallvec::SmallVec;
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -11,9 +9,6 @@ use thiserror::Error;
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
 
-/// # Panics
-///
-/// Panics if input is malformed.
 pub fn run() {
     println!(".Day 19");
 
@@ -33,6 +28,18 @@ pub fn run() {
         part_2(&input)
     );
     println!("')");
+}
+
+#[must_use]
+pub fn parse_test_input() -> Input {
+    INPUT.parse().expect("Parse input")
+}
+
+pub fn profile() {
+    use std::hint::black_box;
+    let input = parse_test_input();
+    black_box(part_1(&input));
+    black_box(part_2(&input));
 }
 
 #[must_use]
@@ -530,13 +537,4 @@ impl FromStr for Input {
             parts,
         })
     }
-}
-
-/// # Panics
-///
-/// Panics if input is malformed.
-
-#[must_use]
-pub fn parse_test_input() -> Input {
-    INPUT.parse().expect("Parse input")
 }

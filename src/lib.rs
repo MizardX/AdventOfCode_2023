@@ -4,6 +4,9 @@
 #![feature(array_windows)]
 #![feature(iterator_try_collect)]
 
+#![warn(clippy::pedantic)]
+#![allow(clippy::missing_panics_doc)]
+
 use std::time::SystemTime;
 
 macro_rules! days {
@@ -11,12 +14,18 @@ macro_rules! days {
         $(
             pub mod $mod;
         )*
-        pub fn run(day: Option<usize>) {
+        pub fn run(day: Option<usize>, repeat: Option<usize>) {
             let start = SystemTime::now();
             $(
                 #[allow(clippy::zero_prefixed_literal)]
                 if let None | Some($val) = day {
-                    $mod::run()
+                    if let Some(repeat) = repeat {
+                        for _ in 0..repeat {
+                            $mod::profile();
+                        }
+                    } else {
+                        $mod::run();
+                    }
                 }
             )*
             let d = SystemTime::now().duration_since(start).unwrap();

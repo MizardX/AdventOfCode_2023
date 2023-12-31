@@ -1,5 +1,3 @@
-#![warn(clippy::pedantic)]
-
 use std::num::ParseIntError;
 
 const EXAMPLE: &str = include_str!("example.txt");
@@ -20,7 +18,18 @@ pub fn run() {
     println!("')");
 }
 
-#[allow(unused)]
+#[must_use]
+pub fn parse_test_input() -> Input {
+    parse_input(INPUT)
+}
+
+pub fn profile() {
+    use std::hint::black_box;
+    let input = parse_test_input();
+    black_box(part_1(&input));
+    black_box(part_2(&input));
+}
+
 #[must_use]
 pub fn part_1(input: &Input) -> i64 {
     let mut product = 1;
@@ -30,7 +39,6 @@ pub fn part_1(input: &Input) -> i64 {
     product
 }
 
-#[allow(unused)]
 #[must_use]
 pub fn part_2(input: &Input) -> i64 {
     let mut combined = Race::default();
@@ -97,13 +105,4 @@ fn parse_input(text: &str) -> Input {
         .collect::<Vec<_>>();
 
     Input { races }
-}
-
-/// # Panics
-///
-/// Panics if input is malformed.
-
-#[must_use]
-pub fn parse_test_input() -> Input {
-    parse_input(INPUT)
 }

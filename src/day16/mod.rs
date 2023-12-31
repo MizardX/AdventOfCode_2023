@@ -1,5 +1,3 @@
-#![warn(clippy::pedantic)]
-
 use smallvec::{smallvec, SmallVec};
 use std::fmt::Debug;
 use std::ops::{Index, IndexMut};
@@ -11,9 +9,6 @@ use crate::aoclib::Dir;
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
 
-/// # Panics
-///
-/// Panics if input is malformed.
 pub fn run() {
     println!(".Day 16");
 
@@ -27,6 +22,18 @@ pub fn run() {
     println!("|+-Part 1: {} (expected 6605)", part_1(&input));
     println!("|'-Part 2: {} (expected 6766)", part_2(&input));
     println!("')");
+}
+
+#[must_use]
+pub fn parse_test_input() -> MirrorGraph {
+    INPUT.parse().expect("Parse input")
+}
+
+pub fn profile() {
+    use std::hint::black_box;
+    let input = parse_test_input();
+    black_box(part_1(&input));
+    black_box(part_2(&input));
 }
 
 #[must_use]
@@ -442,13 +449,4 @@ impl TryFrom<u8> for Tile {
 pub enum ParseInputError {
     #[error("Unexpected character: '{0}'")]
     InvalidChar(char),
-}
-
-/// # Panics
-///
-/// Panics if input is malformed.
-
-#[must_use]
-pub fn parse_test_input() -> MirrorGraph {
-    INPUT.parse().expect("Parse input")
 }

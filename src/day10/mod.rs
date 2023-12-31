@@ -1,5 +1,3 @@
-#![warn(clippy::pedantic)]
-
 use std::fmt::Debug;
 use std::num::TryFromIntError;
 use std::str::FromStr;
@@ -14,9 +12,6 @@ const EXAMPLE3: &str = include_str!("example3.txt");
 const EXAMPLE4: &str = include_str!("example4.txt");
 const INPUT: &str = include_str!("input.txt");
 
-/// # Panics
-///
-/// Panics if input is malformed.
 pub fn run() {
     println!(".Day 10");
 
@@ -41,6 +36,18 @@ pub fn run() {
     println!("|+-Part 1: {} (expected 6717)", part_1(&input));
     println!("|'-Part 2: {} (expected 381)", part_2(&input));
     println!("')");
+}
+
+#[must_use]
+pub fn parse_test_input() -> Input {
+    INPUT.parse().expect("Real input")
+}
+
+pub fn profile() {
+    use std::hint::black_box;
+    let input = parse_test_input();
+    black_box(part_1(&input));
+    black_box(part_2(&input));
 }
 
 #[must_use]
@@ -205,13 +212,4 @@ impl FromStr for Input {
         grid.set(start, start_pipe);
         Ok(Self { grid, start })
     }
-}
-
-/// # Panics
-///
-/// Panics if input is malformed.
-
-#[must_use]
-pub fn parse_test_input() -> Input {
-    INPUT.parse().expect("Real input")
 }

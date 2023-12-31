@@ -1,5 +1,3 @@
-#![warn(clippy::pedantic)]
-
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
 
@@ -18,7 +16,18 @@ pub fn run() {
     println!("')");
 }
 
-#[allow(unused)]
+#[must_use]
+pub fn parse_test_input() -> Vec<Card> {
+    parse_input(INPUT)
+}
+
+pub fn profile() {
+    use std::hint::black_box;
+    let input = parse_test_input();
+    black_box(part_1(&input));
+    black_box(part_2(&input));
+}
+
 #[must_use]
 pub fn part_1(input: &[Card]) -> usize {
     let mut sum = 0;
@@ -42,7 +51,6 @@ pub fn part_2(input: &[Card]) -> usize {
     sum
 }
 
-#[allow(unused)]
 #[derive(Debug, Clone)]
 pub struct Card {
     winning: u128,
@@ -80,13 +88,4 @@ fn parse_input(text: &str) -> Vec<Card> {
         res.push(Card { winning, have });
     }
     res
-}
-
-/// # Panics
-///
-/// Panics if input is malformed.
-
-#[must_use]
-pub fn parse_test_input() -> Vec<Card> {
-    parse_input(INPUT)
 }

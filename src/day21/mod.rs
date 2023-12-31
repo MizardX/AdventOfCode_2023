@@ -1,5 +1,3 @@
-#![warn(clippy::pedantic)]
-
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::str::FromStr;
@@ -10,9 +8,6 @@ use crate::aoclib::{CommonParseError, Dir, Grid, Pos, RepeatingGrid};
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
 
-/// # Panics
-///
-/// Panics if input is malformed.
 pub fn run() {
     println!(".Day 21");
 
@@ -40,6 +35,18 @@ pub fn run() {
         part_2(&input, 26_501_365)
     );
     println!("')");
+}
+
+#[must_use]
+pub fn parse_test_input() -> Garden {
+    INPUT.parse().expect("Parse input")
+}
+
+pub fn profile() {
+    use std::hint::black_box;
+    let input = parse_test_input();
+    black_box(part_1(&input, 64));
+    black_box(part_2(&input, 26_501_365));
 }
 
 #[must_use]
@@ -184,11 +191,3 @@ impl FromStr for Garden {
     }
 }
 
-/// # Panics
-///
-/// Panics if input is malformed.
-
-#[must_use]
-pub fn parse_test_input() -> Garden {
-    INPUT.parse().expect("Parse input")
-}

@@ -1,5 +1,3 @@
-#![warn(clippy::pedantic)]
-
 use smallvec::{smallvec, SmallVec};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
@@ -12,9 +10,6 @@ use crate::aoclib::{CommonParseError, Dir, Grid, Pos};
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
 
-/// # Panics
-///
-/// Panics if input is malformed.
 pub fn run() {
     println!(".Day 23");
 
@@ -28,6 +23,23 @@ pub fn run() {
     println!("|+-Part 1: {} (expected 2402)", part_1(&input));
     println!("|'-Part 2: {} (expected 6450)", part_2(&input));
     println!("')");
+}
+
+#[must_use]
+pub fn parse_test_input() -> Map {
+    INPUT.parse::<Map>().expect("Parse input")
+}
+
+#[must_use]
+pub fn transform_test_input(input: &Map) -> Graph {
+    Graph::from(input)
+}
+
+pub fn profile() {
+    use std::hint::black_box;
+    let input = transform_test_input(&parse_test_input());
+    black_box(part_1(&input));
+    black_box(part_2(&input));
 }
 
 #[must_use]
@@ -429,18 +441,4 @@ pub enum ParseInputError {
     InvalidChar(char),
     #[error("{0:?}")]
     CommonError(#[from] CommonParseError),
-}
-
-/// # Panics
-///
-/// Panics if input is malformed.
-
-#[must_use]
-pub fn parse_test_input() -> Map {
-    INPUT.parse::<Map>().expect("Parse input")
-}
-
-#[must_use]
-pub fn transform_test_input(input: &Map) -> Graph {
-    Graph::from(input)
 }

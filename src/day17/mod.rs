@@ -1,5 +1,3 @@
-#![warn(clippy::pedantic)]
-
 use smallvec::SmallVec;
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -12,9 +10,6 @@ const EXAMPLE1: &str = include_str!("example1.txt");
 const EXAMPLE2: &str = include_str!("example2.txt");
 const INPUT: &str = include_str!("input.txt");
 
-/// # Panics
-///
-/// Panics if input is malformed.
 pub fn run() {
     println!(".Day 17");
 
@@ -32,6 +27,18 @@ pub fn run() {
     println!("|+-Part 1: {} (expected 1099)", part_1(&input));
     println!("|'-Part 2: {} (expected 1266)", part_2(&input));
     println!("')");
+}
+
+#[must_use]
+pub fn parse_test_input() -> Input {
+    INPUT.parse().expect("Parse input")
+}
+
+pub fn profile() {
+    use std::hint::black_box;
+    let input = parse_test_input();
+    black_box(part_1(&input));
+    black_box(part_2(&input));
 }
 
 #[must_use]
@@ -165,13 +172,4 @@ impl FromStr for Input {
         let grid = text.parse()?;
         Ok(Self { grid })
     }
-}
-
-/// # Panics
-///
-/// Panics if input is malformed.
-
-#[must_use]
-pub fn parse_test_input() -> Input {
-    INPUT.parse().expect("Parse input")
 }

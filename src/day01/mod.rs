@@ -1,5 +1,3 @@
-#![warn(clippy::pedantic)]
-
 const EXAMPLE1: &str = include_str!("example1.txt");
 const EXAMPLE2: &str = include_str!("example2.txt");
 const INPUT: &str = include_str!("input.txt");
@@ -18,6 +16,18 @@ pub fn run() {
     println!("|+-Part 1: {} (expected 54927)", part_1(&input));
     println!("|'-Part 2: {} (expected 54581)", part_2(&input));
     println!("')");
+}
+
+#[must_use]
+pub fn parse_test_input() -> Vec<Input<'static>> {
+    parse_input(INPUT)
+}
+
+pub fn profile() {
+    use std::hint::black_box;
+    let input = parse_test_input();
+    black_box(part_1(&input));
+    black_box(part_2(&input));
 }
 
 #[must_use]
@@ -229,9 +239,4 @@ fn parse_input(text: &str) -> Vec<Input> {
         res.push(Input { line });
     }
     res
-}
-
-#[must_use]
-pub fn parse_test_input() -> Vec<Input<'static>> {
-    parse_input(INPUT)
 }

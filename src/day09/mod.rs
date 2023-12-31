@@ -1,5 +1,3 @@
-#![warn(clippy::pedantic)]
-
 use std::num::ParseIntError;
 use std::str::FromStr;
 
@@ -9,9 +7,6 @@ use thiserror::Error;
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
 
-/// # Panics
-///
-/// Panics if input is malformed.
 pub fn run() {
     println!(".Day 09");
 
@@ -27,7 +22,18 @@ pub fn run() {
     println!("')");
 }
 
-#[allow(unused)]
+#[must_use]
+pub fn parse_test_input() -> Vec<Input> {
+    parse_input(INPUT).expect("Parse real input")
+}
+
+pub fn profile() {
+    use std::hint::black_box;
+    let input = parse_input(INPUT).expect("Parse real input");
+    black_box(part_1(&input));
+    black_box(part_2(&input));
+}
+
 #[must_use]
 pub fn part_1(input: &[Input]) -> i64 {
     let mut deltas = Vec::with_capacity(41);
@@ -38,7 +44,6 @@ pub fn part_1(input: &[Input]) -> i64 {
     sum
 }
 
-#[allow(unused)]
 #[must_use]
 pub fn part_2(input: &[Input]) -> i64 {
     let mut deltas = Vec::with_capacity(41);
@@ -96,13 +101,4 @@ fn parse_input(text: &str) -> Result<Vec<Input>, ParseInputError> {
         res.push(line.parse()?);
     }
     Ok(res)
-}
-
-/// # Panics
-///
-/// Panics if input is malformed.
-
-#[must_use]
-pub fn parse_test_input() -> Vec<Input> {
-    parse_input(INPUT).expect("Real input")
 }

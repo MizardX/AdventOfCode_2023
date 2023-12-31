@@ -1,5 +1,3 @@
-#![warn(clippy::pedantic)]
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::{Add, Sub};
 
@@ -21,6 +19,18 @@ pub fn run() {
     println!("|+-Part 1: {} (expected 532428)", part_1(&input));
     println!("|'-Part 2: {} (expected 84051670)", part_2(&input));
     println!("')");
+}
+
+#[must_use]
+pub fn parse_test_input() -> Input {
+    parse_input(INPUT)
+}
+
+pub fn profile() {
+    use std::hint::black_box;
+    let input = parse_test_input();
+    black_box(part_1(&input));
+    black_box(part_2(&input));
 }
 
 #[must_use]
@@ -192,10 +202,3 @@ fn parse_input(text: &str) -> Input {
     res
 }
 
-/// # Panics
-///
-/// Panics if input is malformed.
-#[must_use]
-pub fn parse_test_input() -> Input {
-    parse_input(INPUT)
-}

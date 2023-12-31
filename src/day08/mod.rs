@@ -1,5 +1,3 @@
-#![warn(clippy::pedantic)]
-
 use std::str::FromStr;
 
 use thiserror::Error;
@@ -11,9 +9,6 @@ const EXAMPLE2: &str = include_str!("example2.txt");
 const EXAMPLE3: &str = include_str!("example3.txt");
 const INPUT: &str = include_str!("input.txt");
 
-/// # Panics
-///
-/// Panics if input is malformed.
 pub fn run() {
     println!(".Day 07");
 
@@ -36,7 +31,18 @@ pub fn run() {
     println!("')");
 }
 
-#[allow(unused)]
+#[must_use]
+pub fn parse_test_input() -> Input {
+    INPUT.parse().expect("Real input")
+}
+
+pub fn profile() {
+    use std::hint::black_box;
+    let input = parse_test_input();
+    black_box(part_1(&input));
+    black_box(part_2(&input));
+}
+
 #[must_use]
 pub fn part_1(input: &Input) -> usize {
     let mut node = input.start_ix;
@@ -52,7 +58,6 @@ pub fn part_1(input: &Input) -> usize {
     unreachable!()
 }
 
-#[allow(unused)]
 #[must_use]
 pub fn part_2(input: &Input) -> u64 {
     let mut res = 1;
@@ -88,8 +93,6 @@ pub enum ParseInputError {
     MissingSeparatorLine,
     #[error("Node line does not match 'NAME = (NAME, NAME)'")]
     NodeSyntaxError,
-    // #[error("Node not found")]
-    // NodeNotFound,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -198,13 +201,4 @@ impl FromStr for Input {
             start_ixs,
         })
     }
-}
-
-/// # Panics
-///
-/// Panics if input is malformed.
-
-#[must_use]
-pub fn parse_test_input() -> Input {
-    INPUT.parse().expect("Real input")
 }

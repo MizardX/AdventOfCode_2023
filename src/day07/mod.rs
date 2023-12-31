@@ -1,5 +1,3 @@
-#![warn(clippy::pedantic)]
-
 use std::num::ParseIntError;
 use std::str::FromStr;
 
@@ -23,7 +21,18 @@ pub fn run() {
     println!("')");
 }
 
-#[allow(unused)]
+#[must_use]
+pub fn parse_test_input() -> Vec<Input> {
+    parse_input(INPUT)
+}
+
+pub fn profile() {
+    use std::hint::black_box;
+    let input = parse_test_input();
+    black_box(part_1(&input));
+    black_box(part_2(&input));
+}
+
 #[must_use]
 pub fn part_1(input: &[Input]) -> u64 {
     let mut input = input.to_vec();
@@ -35,7 +44,6 @@ pub fn part_1(input: &[Input]) -> u64 {
     sum
 }
 
-#[allow(unused)]
 #[must_use]
 pub fn part_2(input: &[Input]) -> u64 {
     let mut input = input.to_vec();
@@ -207,13 +215,4 @@ fn parse_input(text: &str) -> Vec<Input> {
         res.push(line.parse().expect("Valid input"));
     }
     res
-}
-
-/// # Panics
-///
-/// Panics if input is malformed.
-
-#[must_use]
-pub fn parse_test_input() -> Vec<Input> {
-    parse_input(INPUT)
 }

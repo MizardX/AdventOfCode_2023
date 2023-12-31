@@ -1,5 +1,3 @@
-#![warn(clippy::pedantic)]
-
 use smallvec::{smallvec, SmallVec};
 use std::collections::{hash_map::Entry, HashMap, VecDeque};
 use thiserror::Error;
@@ -10,9 +8,6 @@ const EXAMPLE1: &str = include_str!("example1.txt");
 const EXAMPLE2: &str = include_str!("example2.txt");
 const INPUT: &str = include_str!("input.txt");
 
-/// # Panics
-///
-/// Panics if input is malformed.
 pub fn run() {
     println!(".Day 20");
 
@@ -29,6 +24,18 @@ pub fn run() {
     println!("|+-Part 1: {} (expected 899848294)", part_1(&input));
     println!("|'-Part 2: {} (expected 247454898168563)", part_2(&input));
     println!("')");
+}
+
+#[must_use]
+pub fn parse_test_input() -> Circuit<'static> {
+    Circuit::try_from(INPUT).expect("Parse input")
+}
+
+pub fn profile() {
+    use std::hint::black_box;
+    let input = parse_test_input();
+    black_box(part_1(&input));
+    black_box(part_2(&input));
 }
 
 #[must_use]
@@ -325,13 +332,4 @@ impl<'a> TryFrom<&'a str> for GateBuilder<'a> {
 
         Ok(Self::new(name, gate_type, destinations))
     }
-}
-
-/// # Panics
-///
-/// Panics if input is malformed.
-
-#[must_use]
-pub fn parse_test_input() -> Circuit<'static> {
-    Circuit::try_from(INPUT).expect("Parse input")
 }
