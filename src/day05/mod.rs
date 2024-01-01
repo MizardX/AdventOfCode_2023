@@ -53,11 +53,10 @@ pub fn part_1(input: &Input) -> isize {
 
 #[must_use]
 pub fn part_2(input: &Input) -> isize {
-    let mut seed_ranges = input
-        .seeds
-        .array_chunks::<2>()
-        .map(|a| Range(a[0], a[0] + a[1]))
-        .collect::<Vec<_>>();
+    let mut seed_ranges = Vec::with_capacity(input.seeds.len() / 2);
+    for &[start, len] in input.seeds.array_chunks() {
+        seed_ranges.push(Range::new(start, len));
+    }
     seed_ranges.sort_unstable();
     let mut location = 0;
     loop {
@@ -110,13 +109,24 @@ impl PartialOrd for Mapping {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-struct Range(isize, isize);
+struct Range {
+    start: isize,
+    len: isize,
+}
 
 impl Range {
+    fn new(start: isize, len: isize) -> Self {
+        Self { start, len }
+    }
+
+    fn end(&self) -> isize {
+        self.start + self.len
+    }
+
     fn cmp_value(&self, val: isize) -> Ordering {
-        match val.cmp(&self.0) {
+        match val.cmp(&self.start) {
             Ordering::Less => Ordering::Greater,
-            _ => match val.cmp(&self.1) {
+            _ => match val.cmp(&self.end()) {
                 Ordering::Less => Ordering::Equal,
                 _ => Ordering::Less,
             },
@@ -129,9 +139,9 @@ impl Debug for Range {
         write!(
             f,
             "{}..{} ({})",
-            numfmt(self.0),
-            numfmt(self.1),
-            numfmt(self.1 - self.0)
+            numfmt(self.start),
+            numfmt(self.end()),
+            numfmt(self.len)
         )
     }
 }
@@ -201,8 +211,9 @@ enum ParseError {
     MissingLen,
     #[error("One of the numbers could not be parsed as an integer: {0}")]
     NotInteger(#[from] ParseIntError),
-    // #[error("The line contains more values than expected")]
-    // ExtraneousValues,
+    #[error("The line contains more values than expected")]
+    #[cfg(debug_assertions)]
+    ExtraneousValues,
 }
 
 impl FromStr for Mapping {
@@ -213,9 +224,10 @@ impl FromStr for Mapping {
         let destination_start: isize = it.next().ok_or(ParseError::MissingDestination)?.parse()?;
         let source_start: isize = it.next().ok_or(ParseError::MissingSource)?.parse()?;
         let len: isize = it.next().ok_or(ParseError::MissingLen)?.parse()?;
-        // if it.next().is_some() {
-        //     return Err(ParseError::ExtraneousValues);
-        // }
+        #[cfg(debug_assertions)]
+        if it.next().is_some() {
+            return Err(ParseError::ExtraneousValues);
+        }
         Ok(Self::new(
             source_start,
             source_start + len,
