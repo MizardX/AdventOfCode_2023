@@ -33,7 +33,7 @@ pub fn profile() {
 #[must_use]
 pub fn part_1(input: &Input) -> usize {
     let mut sum: usize = 0;
-    let empty_line = vec![b'.'; input.lines[0].len()];
+    let empty_line = &[b'.'; 140][..input.lines[0].len()];
     let height = input.lines.len();
     let first = [[&empty_line, input.lines[0], input.lines[1]]].into_iter();
     let middle = input.lines.array_windows().into_iter();
@@ -88,7 +88,7 @@ fn is_symbol(ch: u8) -> bool {
 #[must_use]
 pub fn part_2(input: &Input) -> usize {
     let mut sum: usize = 0;
-    let empty_line = vec![b'.'; input.lines[0].len()];
+    let empty_line = &[b'.'; 140][..input.lines[0].len()];
     let height = input.lines.len();
     let first = [[&empty_line, input.lines[0], input.lines[1]]].into_iter();
     let middle = input.lines.array_windows().into_iter();
@@ -159,7 +159,7 @@ pub struct Input<'a> {
 }
 
 fn parse_input(text: &str) -> Input<'_> {
-    Input {
-        lines: text.as_bytes().lines().collect(),
-    }
+    let mut lines = Vec::with_capacity(140);
+    lines.extend(text.as_bytes().lines());
+    Input { lines }
 }
