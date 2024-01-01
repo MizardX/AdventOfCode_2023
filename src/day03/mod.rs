@@ -1,7 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
-use std::ops::{Add, Sub};
-
-use smallvec::SmallVec;
+use bstr::ByteSlice;
 
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
@@ -22,7 +19,7 @@ pub fn run() {
 }
 
 #[must_use]
-pub fn parse_test_input() -> Input {
+pub fn parse_test_input<'a>() -> Input<'a> {
     parse_input(INPUT)
 }
 
@@ -36,169 +33,133 @@ pub fn profile() {
 #[must_use]
 pub fn part_1(input: &Input) -> usize {
     let mut sum: usize = 0;
-    let mut symbol_lookups = [(); 3].map(|()| BTreeSet::new());
-    for sym in &input.symbols[0] {
-        symbol_lookups[2].insert(sym.pos.col);
-    }
-    for (r, lblrow) in input.labels.iter().enumerate() {
-        symbol_lookups.rotate_left(1);
-        symbol_lookups[2].clear();
-        if r + 1 < input.symbols.len() {
-            for sym in &input.symbols[r + 1] {
-                symbol_lookups[2].insert(sym.pos.col);
-            }
-        }
-        for lbl in lblrow {
-            let rng = (lbl.pos.col - 1)..=(lbl.pos.col + lbl.len);
-            let mut count = 0;
-            for l in &symbol_lookups {
-                let matched = l.range(rng.clone()).collect::<SmallVec<[_; 3]>>();
-                count += matched.len();
-            }
-            if count > 0 {
-                sum += lbl.name as usize;
+    let empty_line = vec![b'.'; input.lines[0].len()];
+    let height = input.lines.len();
+    let first = [[&empty_line, input.lines[0], input.lines[1]]].into_iter();
+    let middle = input.lines.array_windows().into_iter();
+    let last = [[
+        input.lines[height - 2],
+        input.lines[height - 1],
+        &empty_line,
+    ]]
+    .into_iter();
+    for [above, current, below] in []
+        .into_iter()
+        .chain(first)
+        .chain(middle.copied())
+        .chain(last)
+    {
+        let mut value = 0;
+        let mut len = 0;
+        for (c, ch) in current.iter().chain(b".".iter()).copied().enumerate() {
+            match ch {
+                b'0'..=b'9' => {
+                    value = 10 * value + (ch - b'0') as usize;
+                    len += 1;
+                }
+                _ if len > 0 => {
+                    let left = (c - len).saturating_sub(1);
+                    let right = (c + 1).min(current.len());
+                    if [
+                        &above[left..right],
+                        &current[left..right],
+                        &below[left..right],
+                    ]
+                    .into_iter()
+                    .any(|s| s.iter().copied().any(is_symbol))
+                    {
+                        sum += value;
+                    }
+                    value = 0;
+                    len = 0;
+                }
+                _ => (),
             }
         }
     }
 
     sum
+}
+
+fn is_symbol(ch: u8) -> bool {
+    !matches!(ch, b'.' | b'0'..=b'9')
 }
 
 #[must_use]
 pub fn part_2(input: &Input) -> usize {
     let mut sum: usize = 0;
-    let mut num_lookups = [(); 3].map(|()| BTreeMap::new());
-    for lbl in &input.labels[0] {
-        num_lookups[2].insert(lbl.pos.col, lbl);
-    }
-    for r in 0..input.labels.len() {
-        num_lookups.rotate_left(1);
-        num_lookups[2].clear();
-        if r + 1 < input.labels.len() {
-            for lbl in &input.labels[r + 1] {
-                num_lookups[2].insert(lbl.pos.col, lbl);
-            }
-        }
-        'symbol: for sym in &input.symbols[r] {
-            if sym.name != b'*' {
+    let empty_line = vec![b'.'; input.lines[0].len()];
+    let height = input.lines.len();
+    let first = [[&empty_line, input.lines[0], input.lines[1]]].into_iter();
+    let middle = input.lines.array_windows().into_iter();
+    let last = [[
+        input.lines[height - 2],
+        input.lines[height - 1],
+        &empty_line,
+    ]]
+    .into_iter();
+    for [above, current, below] in []
+        .into_iter()
+        .chain(first)
+        .chain(middle.copied())
+        .chain(last)
+    {
+        'symbol: for (c, ch) in current.iter().copied().enumerate() {
+            if ch != b'*' {
                 continue;
             }
-            let rng = (sym.pos.col - 3)..(sym.pos.col + 2);
-            let mut prod = 1;
+            let left = c.saturating_sub(3);
+            let right = (c + 3).min(current.len() - 1);
+            let mut product = 1;
             let mut count = 0;
-            for lookup in &num_lookups {
-                for (&c, &lbl) in lookup.range(rng.clone()) {
-                    if c + lbl.len >= sym.pos.col {
-                        if count >= 2 {
-                            continue 'symbol;
+            for line in [
+                &above[left..=right],
+                &current[left..=right],
+                &below[left..=right],
+            ] {
+                let mut value = 0;
+                let mut len = 0;
+                for (i, ch) in line.iter().chain(b".".iter()).copied().enumerate() {
+                    match ch {
+                        b'0'..=b'9' => {
+                            value = value * 10 + (ch - b'0') as usize;
+                            len += 1;
                         }
-                        prod *= lbl.name as usize;
-                        count += 1;
+                        _ if len > 0 => {
+                            // left+i is the position of the character just after the number. 123_ <-- here
+                            // left+i-len is the position of the first character. here --> 123
+                            // We want (left+i-len..left+i) to overlap (c-1..=c+1)
+                            let start = left + i - len;
+                            let end = left + i - 1;
+                            if end + 1 >= c && start <= c + 1 {
+                                if count == 2 {
+                                    continue 'symbol;
+                                }
+                                product *= value;
+                                count += 1;
+                            }
+                            value = 0;
+                            len = 0;
+                        }
+                        _ => (),
                     }
                 }
             }
             if count == 2 {
-                sum += prod;
+                sum += product;
             }
         }
     }
     sum
 }
 
-#[derive(Debug, Clone, Copy, Default, Eq, PartialEq, Hash)]
-struct Point {
-    row: i16,
-    col: i16,
-}
-impl Point {
-    fn new(row: i16, col: i16) -> Self {
-        Self { row, col }
-    }
-}
-impl Add<(i16, i16)> for Point {
-    type Output = Self;
-
-    fn add(self, rhs: (i16, i16)) -> Self::Output {
-        Self {
-            row: self.row + rhs.0,
-            col: self.col + rhs.1,
-        }
-    }
-}
-impl Sub<(i16, i16)> for Point {
-    type Output = Self;
-
-    fn sub(self, rhs: (i16, i16)) -> Self::Output {
-        Self {
-            row: self.row - rhs.0,
-            col: self.col - rhs.1,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Default)]
-pub struct Input {
-    symbols: Vec<SmallVec<[Symbol; 9]>>,
-    labels: Vec<SmallVec<[Label; 16]>>,
+pub struct Input<'a> {
+    lines: Vec<&'a [u8]>,
 }
-impl Input {
-    fn new() -> Self {
-        Self {
-            symbols: Vec::with_capacity(140),
-            labels: Vec::with_capacity(140),
-        }
+
+fn parse_input(text: &str) -> Input<'_> {
+    Input {
+        lines: text.as_bytes().lines().collect(),
     }
 }
-
-#[derive(Debug, Clone)]
-struct Label {
-    pos: Point,
-    len: i16,
-    name: u16,
-}
-
-#[derive(Debug, Clone)]
-struct Symbol {
-    pos: Point,
-    name: u8,
-}
-
-#[allow(clippy::cast_possible_truncation)]
-#[allow(clippy::cast_possible_wrap)]
-fn parse_input(text: &str) -> Input {
-    let mut res: Input = Input::new();
-    for (r, line) in text.lines().enumerate() {
-        res.labels.push(SmallVec::new());
-        res.symbols.push(SmallVec::new());
-        let mut number: Option<Label> = None;
-        for (c, ch) in line.bytes().enumerate() {
-            let c = i16::try_from(c).expect("col < 2^15");
-            if ch.is_ascii_digit() {
-                if let Some(num) = number.as_mut() {
-                    num.len += 1;
-                    num.name = 10 * num.name + u16::from(ch - b'0');
-                } else {
-                    number = Some(Label {
-                        pos: Point::new(r as _, c as _),
-                        len: 1,
-                        name: u16::from(ch - b'0'),
-                    });
-                }
-            } else if let Some(num) = number {
-                res.labels[r].push(num);
-                number = None;
-            }
-            if !ch.is_ascii_digit() && ch != b'.' {
-                res.symbols[r].push(Symbol {
-                    pos: Point::new(r as _, c as _),
-                    name: ch,
-                });
-            }
-        }
-        if let Some(num) = number {
-            res.labels[r].push(num);
-        }
-    }
-    res
-}
-
