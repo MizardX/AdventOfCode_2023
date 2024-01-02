@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use bstr::ByteSlice;
 use thiserror::Error;
 
 const EXAMPLE: &str = include_str!("example.txt");
@@ -103,25 +104,27 @@ impl FromStr for Input {
     type Err = ParseInputError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut galaxy_rows = Vec::new();
-        let mut galaxy_cols = Vec::new();
-        let mut lines = s.lines().enumerate();
-        let (_, first) = lines.next().ok_or(ParseInputError::EmptyInput)?;
-        let width = first.len();
+        let mut galaxy_rows = Vec::with_capacity(450);
+        let mut galaxy_cols = Vec::with_capacity(450);
+        let mut lines = s.as_bytes().lines().enumerate();
+        let first_line = lines.next().ok_or(ParseInputError::EmptyInput)?;
+        #[cfg(debug_assertions)]
+        let width = first_line.1.len();
 
-        for (r, srow) in std::iter::once((0, first)).chain(lines) {
+        for (r, srow) in [first_line].into_iter().chain(lines) {
+            #[cfg(debug_assertions)]
             if srow.len() != width {
                 return Err(ParseInputError::InvaidInput);
             }
-            for (c, ch) in srow.bytes().enumerate() {
-                match ch {
-                    b'#' => {
-                        galaxy_rows.push(r);
-                        galaxy_cols.push(c);
-                    }
-                    b'.' => (),
-                    _ => return Err(ParseInputError::InvalidChar(ch as char)),
+            let mut start = 0;
+            while let Some(c) = srow[start..].find_byte(b'#') {
+                #[cfg(debug_assertions)]
+                if !srow[start..start + c].bytes().all(|ch| ch == b'.') {
+                    return Err(ParseInputError::InvaidInput);
                 }
+                galaxy_rows.push(r);
+                galaxy_cols.push(start + c);
+                start += c + 1;
             }
         }
         galaxy_cols.sort_unstable();
