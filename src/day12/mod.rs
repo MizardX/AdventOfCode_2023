@@ -1,5 +1,5 @@
-use std::str::FromStr;
-
+use bstr::ByteSlice;
+use bstr_parse::{BStrParse, ParseIntError};
 use num_traits::PrimInt;
 use smallvec::SmallVec;
 use thiserror::Error;
@@ -37,7 +37,7 @@ pub fn profile() {
 #[must_use]
 pub fn part_1(input: &[Input]) -> usize {
     let mut sum = 0;
-    let mut cache = vec![None; (6 + 2) * 20];
+    let mut cache = [None; (6 + 2) * 20]; // 160
     for spring in input {
         sum += spring.combinations(&mut cache);
     }
@@ -47,7 +47,7 @@ pub fn part_1(input: &[Input]) -> usize {
 #[must_use]
 pub fn part_2(input: &[Input]) -> usize {
     let mut sum = 0;
-    let mut cache = vec![None; (6 * 5 + 2) * (20 * 5 + 4)];
+    let mut cache = [None; (6 * 5 + 2) * (20 * 5 + 4)]; // 3328
     for spring in input {
         let spring2 = spring.expand::<u128, 30>(5);
         let count = spring2.combinations(&mut cache);
@@ -60,6 +60,10 @@ pub fn part_2(input: &[Input]) -> usize {
 pub enum ParseInputError {
     #[error("Invalid character: {0}")]
     InvalidInput(char),
+    #[error("Expected character: {0}")]
+    Expected(char),
+    #[error(transparent)]
+    InvalidNumber(#[from] ParseIntError),
 }
 
 #[derive(Debug, Clone)]
@@ -105,45 +109,43 @@ where
     }
 }
 
-impl<T, const N: usize> FromStr for Input<T, N>
+impl<'a, T, const N: usize> TryFrom<&'a [u8]> for Input<T, N>
 where
     T: PrimInt,
 {
-    type Err = ParseInputError;
+    type Error = ParseInputError;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn try_from(line: &'a [u8]) -> Result<Self, Self::Error> {
         let zero = T::zero();
         let one = T::one();
 
-        let mut bytes = s.bytes();
-        let mut len = 0;
         let mut mask = zero;
         let mut broken = zero;
         let mut counts = SmallVec::new();
-        for b in &mut bytes {
+        let len = line.find_byte(b' ').ok_or(ParseInputError::Expected(' '))?;
+        let mut shift = len - 1;
+        for &b in &line[..len] {
             let (m, b) = match b {
                 b'.' => (one, zero),
                 b'#' => (one, one),
                 b'?' => (zero, zero),
-                b' ' => break,
                 b => return Err(ParseInputError::InvalidInput(b as char)),
             };
-            mask = (mask << 1) | m;
-            broken = (broken << 1) | b;
-            len += 1;
+            mask = mask | (m << shift);
+            broken = broken | (b << shift);
+            shift -= 1;
         }
-        let mut num = 0;
-        for b in bytes {
-            num = match b {
-                b'0'..=b'9' => 10 * num + (b - b'0') as usize,
-                b',' => {
-                    counts.push(num);
-                    0
-                }
-                b => return Err(ParseInputError::InvalidInput(b as char)),
-            };
+
+        let mut start = len + 1;
+        while let Some(ix) = line[start..].find_byte(b',') {
+            let num: usize = line[start..start + ix].parse()?;
+            counts.push(num);
+            start += ix + 1;
         }
+
+        let num: usize = line[start..].parse()?;
         counts.push(num);
+
         Ok(Self {
             len,
             mask,
@@ -231,9 +233,9 @@ where
 }
 
 fn parse_input(text: &str) -> Result<Vec<Input>, ParseInputError> {
-    let mut res: Vec<Input> = Vec::new();
-    for line in text.lines() {
-        res.push(line.parse()?);
+    let mut res: Vec<Input> = Vec::with_capacity(1000);
+    for line in text.as_bytes().lines() {
+        res.push(line.try_into()?);
     }
     Ok(res)
 }
