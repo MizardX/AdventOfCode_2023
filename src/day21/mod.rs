@@ -130,8 +130,9 @@ impl<'a> Walker<'a> {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 enum Tile {
+    #[default]
     GardenPlot,
     Rock,
     Start,

@@ -5,6 +5,7 @@ use std::num::{ParseFloatError, ParseIntError};
 use std::ops::{Add, Div, Index, IndexMut, Mul, Sub};
 use std::str::FromStr;
 
+use bstr::ByteSlice;
 use num_traits::{Num, PrimInt};
 use thiserror::Error;
 
@@ -334,26 +335,29 @@ where
 
 impl<T> FromStr for Grid<T>
 where
-    T: TryFrom<u8>,
+    T: TryFrom<u8> + Default + Copy,
     CommonParseError: Into<<T as TryFrom<u8>>::Error>,
     // reverse of <T as TryFrom<u8>>::Error: From<CommonParseError> -- But the type checker didn't like this
 {
     type Err = <T as TryFrom<u8>>::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut lines = s.lines().enumerate();
-        let first = lines.next().ok_or(CommonParseError::EmptyInput.into())?.1;
-        let width = first.len();
+        let mut lines = s.as_bytes().lines().enumerate();
+        let first_line = lines.next().ok_or(CommonParseError::EmptyInput.into())?.1;
+        let width = first_line.len();
         let mut height = 1;
-        let mut values = Vec::with_capacity(width * width);
-        for ch in first.bytes() {
-            values.push(ch.try_into()?);
+        let mut values: Vec<T> = Vec::with_capacity(width * width);
+        let mut row = [(); 140].map(|()| T::default());
+        for x in 0..width {
+            row[x] = first_line[x].try_into()?;
         }
+        values.extend(&row[..width]);
         for (r, line) in lines {
             height = r + 1;
-            for ch in line.bytes() {
-                values.push(ch.try_into()?);
+            for x in 0..width {
+                row[x] = line[x].try_into()?;
             }
+            values.extend(&row[..width]);
         }
         Ok(Self {
             width,

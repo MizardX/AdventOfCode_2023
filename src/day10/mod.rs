@@ -52,15 +52,15 @@ pub fn profile() {
 
 #[must_use]
 pub fn part_1(input: &Input) -> isize {
-    walk_path(input).1 / 2
+    walk_path(input).perimiter / 2
 }
 
 #[must_use]
 pub fn part_2(input: &Input) -> isize {
-    walk_path(input).0
+    walk_path(input).inner_area
 }
 
-fn walk_path(input: &Input) -> (isize, isize) {
+fn walk_path(input: &Input) -> PathResult {
     let enter = input
         .neighbors(input.start)
         .into_iter()
@@ -81,7 +81,7 @@ fn walk_path(input: &Input) -> (isize, isize) {
             .flatten()
             .find(|(next_dir, _)| next_dir.reverse() != dir)
             .unwrap();
-        area += pos.col() * next.row() - next.col() * pos.row();
+        area += pos.col() * next.row() - next.col() * pos.row(); // Sholace formula
         perimiter += 1;
         pos = next;
         dir = next_dir;
@@ -89,29 +89,41 @@ fn walk_path(input: &Input) -> (isize, isize) {
             break;
         }
     }
-    ((area.abs() - perimiter) / 2 + 1, perimiter)
+    let inner_area = (area.abs() - perimiter) / 2 + 1;
+    PathResult {
+        inner_area,
+        perimiter,
+    }
+}
+
+#[derive(Debug)]
+struct PathResult {
+    inner_area: isize,
+    perimiter: isize,
 }
 
 /// Underectional pipes
-#[allow(clippy::upper_case_acronyms)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[allow(clippy::upper_case_acronyms, dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[repr(u8)]
 enum Pipe {
     /// Empty
-    X,
+    #[default]
+    X = b'.' % 11,
     /// Vertical North-South
-    NS,
+    NS = b'|' % 11,
     /// Horizontal East-West
-    EW,
+    EW = b'-' % 11,
     /// North-East turn
-    NE,
+    NE = b'L' % 11,
     /// North-West turn
-    NW,
+    NW = b'J' % 11,
     /// South-West turn
-    SW,
+    SW = b'7' % 11,
     /// South-Eeast turn
-    SE,
+    SE = b'F' % 11,
     /// Starting position, with unknown direction
-    S,
+    S = b'S' % 11,
 }
 
 impl Pipe {
@@ -135,14 +147,9 @@ impl TryFrom<u8> for Pipe {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         Ok(match value {
-            b'|' => Pipe::NS,
-            b'-' => Pipe::EW,
-            b'L' => Pipe::NE,
-            b'J' => Pipe::NW,
-            b'7' => Pipe::SW,
-            b'F' => Pipe::SE,
-            b'.' => Pipe::X,
-            b'S' => Pipe::S,
+            b'|' | b'-' | b'L' | b'J' | b'7' | b'F' | b'.' | b'S' => unsafe {
+                std::mem::transmute(value % 11)
+            },
             ch => return Err(ParseInputError::InvalidSymbol(ch as char)),
         })
     }

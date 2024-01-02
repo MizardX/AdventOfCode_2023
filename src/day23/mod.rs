@@ -297,8 +297,9 @@ impl Debug for Edge {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 enum Tile {
+    #[default]
     Open,
     Blocked,
     Slope(Dir),
