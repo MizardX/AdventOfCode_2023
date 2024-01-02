@@ -53,32 +53,25 @@ pub fn part_2(input: &Input) -> u64 {
 fn distance_between_galaxies(input: &Input, empty_scale: u64) -> u64 {
     assert!(empty_scale > 0);
 
-    let mut row_prev = input.galaxy_rows[0];
-    let mut row_short = 0;
-    let mut row_long = 0;
+    distance_1d(&input.galaxy_rows, empty_scale) + distance_1d(&input.galaxy_cols, empty_scale)
+}
 
-    let mut col_prev = input.galaxy_cols[0];
-    let mut col_short = 0;
-    let mut col_long = 0;
+fn distance_1d(positions: &[usize], empty_scale: u64) -> u64 {
+    let mut pos_prev = positions[0];
+    let mut pos_short = 0;
+    let mut pos_long = 0;
 
     let mut short_sum = 0;
     let mut long_sum = 0;
 
-    for i in 0..input.galaxy_cols.len() {
-        let row_cur = input.galaxy_rows[i];
-        let dela_row = (row_cur - row_prev) as u64;
-        row_prev = row_cur;
-        row_short += dela_row * i as u64;
-        row_long += dela_row.saturating_sub(1) * i as u64;
+    for (i, &pos_cur) in positions.iter().enumerate() {
+        let dela_pos = (pos_cur - pos_prev) as u64;
+        pos_prev = pos_cur;
+        pos_short += dela_pos * i as u64;
+        pos_long += dela_pos.saturating_sub(1) * i as u64;
 
-        let col_cur = input.galaxy_cols[i];
-        let dela_cols = (col_cur - col_prev) as u64;
-        col_prev = col_cur;
-        col_short += dela_cols * i as u64;
-        col_long += dela_cols.saturating_sub(1) * i as u64;
-
-        short_sum += row_short + col_short;
-        long_sum += row_long + col_long;
+        short_sum += pos_short;
+        long_sum += pos_long;
     }
 
     short_sum + long_sum * (empty_scale - 1)
