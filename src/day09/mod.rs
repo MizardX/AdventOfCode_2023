@@ -1,7 +1,7 @@
-use std::num::ParseIntError;
-use std::str::FromStr;
-
+use bstr::ByteSlice;
+use bstr_parse::{BStrParse, ParseIntError};
 use num_traits::Num;
+use smallvec::SmallVec;
 use thiserror::Error;
 
 const EXAMPLE: &str = include_str!("example.txt");
@@ -36,7 +36,7 @@ pub fn profile() {
 
 #[must_use]
 pub fn part_1(input: &[Input]) -> i64 {
-    let mut deltas = Vec::with_capacity(41);
+    let mut deltas: SmallVec<[_; 41]> = SmallVec::new();
     let mut sum = 0;
     for item in input {
         sum += predict_one(item.values.iter().copied(), &mut deltas);
@@ -46,7 +46,7 @@ pub fn part_1(input: &[Input]) -> i64 {
 
 #[must_use]
 pub fn part_2(input: &[Input]) -> i64 {
-    let mut deltas = Vec::with_capacity(41);
+    let mut deltas: SmallVec<[_; 41]> = SmallVec::new();
     let mut sum = 0;
     for item in input {
         sum += predict_one(item.values.iter().rev().copied(), &mut deltas);
@@ -54,7 +54,7 @@ pub fn part_2(input: &[Input]) -> i64 {
     sum
 }
 
-fn predict_one<I, T>(source: I, buf: &mut Vec<T>) -> T
+fn predict_one<I, T, const N: usize>(source: I, buf: &mut SmallVec<[T; N]>) -> T
 where
     I: Iterator<Item = T>,
     T: Num + Copy + std::iter::Sum,
@@ -82,23 +82,32 @@ pub enum ParseInputError {
     NotAnInteger(#[from] ParseIntError),
 }
 
-impl FromStr for Input {
-    type Err = ParseInputError;
+impl<'a> TryFrom<&'a [u8]> for Input {
+    type Error = ParseInputError;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self {
-            values: s
-                .split_ascii_whitespace()
-                .map(str::parse)
-                .collect::<Result<Vec<_>, _>>()?,
-        })
+    fn try_from(line: &'a [u8]) -> Result<Self, Self::Error> {
+        let mut count = 1;
+        let mut start = 0;
+        while let Some(ix) = line[start..].find_byte(b' ') {
+            count += 1;
+            start += ix + 1;
+        }
+        start = 0;
+        let mut values = Vec::with_capacity(count);
+        while let Some(ix) = line[start..].find_byte(b' ') {
+            values.push(line[start..start + ix].parse()?);
+            start += ix + 1;
+        }
+        values.push(line[start..].parse()?);
+        Ok(Self { values })
     }
 }
 
 fn parse_input(text: &str) -> Result<Vec<Input>, ParseInputError> {
-    let mut res: Vec<Input> = Vec::new();
-    for line in text.lines() {
-        res.push(line.parse()?);
+    let line_count = text.as_bytes().lines().count();
+    let mut res: Vec<Input> = Vec::with_capacity(line_count);
+    for line in text.as_bytes().lines() {
+        res.push(line.try_into()?);
     }
     Ok(res)
 }
