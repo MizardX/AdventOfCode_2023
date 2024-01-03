@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use bstr::ByteSlice;
 use smallvec::SmallVec;
 use thiserror::Error;
 
@@ -100,9 +101,9 @@ impl FromStr for Input {
     type Err = ParseInputError;
 
     fn from_str(text: &str) -> Result<Self, Self::Err> {
-        let mut patterns: Vec<Pattern> = Vec::new();
+        let mut patterns: Vec<Pattern> = Vec::with_capacity(100);
         let mut parser = PatternParser::new();
-        for line in text.lines() {
+        for line in text.as_bytes().lines() {
             if !line.is_empty() {
                 parser.parse_line(line)?;
             } else if !parser.is_empty() {
@@ -133,7 +134,7 @@ impl PatternParser {
         PatternParser::default()
     }
 
-    pub fn parse_line(&mut self, line: &str) -> Result<(), ParseInputError> {
+    pub fn parse_line(&mut self, line: &[u8]) -> Result<(), ParseInputError> {
         if self.row == 0 {
             self.width = line.len();
             self.col_masks.extend(std::iter::repeat(0).take(self.width));
