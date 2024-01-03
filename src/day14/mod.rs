@@ -1,3 +1,4 @@
+use bstr::ByteSlice;
 use std::fmt::Display;
 use std::str::FromStr;
 use thiserror::Error;
@@ -39,8 +40,8 @@ pub fn part_1(input: &Input) -> usize {
     input.north_load()
 }
 
-const HASH_MODULO: usize = 2801;
-const HASH_FACTOR: usize = 19;
+const HASH_MODULO: usize = 1697;
+const HASH_FACTOR: usize = 17;
 
 #[must_use]
 pub fn part_2(input: &Input) -> usize {
@@ -65,56 +66,24 @@ pub fn part_2(input: &Input) -> usize {
 }
 
 #[derive(Debug, Clone)]
+struct Row {
+    fixed: u128,
+    rocks: u128,
+}
+
+#[derive(Debug, Clone)]
 pub struct Input {
     width: usize,
     height: usize,
-    tiles: Vec<Tile>,
+    rows: Vec<Row>,
 }
 
 impl Input {
-    fn new(width: usize, height: usize, tiles: Vec<Tile>) -> Self {
-        Self {
-            width,
-            height,
-            tiles,
-        }
-    }
-
-    #[inline]
-    fn is_inside(&self, r: usize, c: usize) -> bool {
-        (0..self.height).contains(&r) && (0..self.width).contains(&c)
-    }
-
-    #[inline]
-    fn index(&self, r: usize, c: usize) -> usize {
-        assert!(self.is_inside(r, c));
-        self.height * r + c
-    }
-
-    #[inline]
-    fn get(&self, r: usize, c: usize) -> Tile {
-        self.tiles[self.index(r, c)]
-    }
-
-    #[inline]
-    fn get_mut(&mut self, r: usize, c: usize) -> &mut Tile {
-        let ix = self.index(r, c);
-        &mut self.tiles[ix]
-    }
-
-    fn get_row(&self, r: usize) -> &[Tile] {
-        let ix = self.index(r, 0);
-        &self.tiles[ix..ix + self.width]
-    }
-
     fn north_load(&self) -> usize {
         let mut sum = 0;
-        for r in 0..self.height {
-            for &tile in self.get_row(r) {
-                if let Tile::Rock = tile {
-                    sum += self.height - r;
-                }
-            }
+        for (r, row) in self.rows.iter().enumerate() {
+            let count = row.rocks.count_ones() as usize;
+            sum += count * (self.height - r);
         }
         sum
     }
@@ -128,16 +97,16 @@ impl Input {
 
     fn tilt_north(&mut self) {
         for c in 0..self.width {
-            let mut row_pos = 0;
+            let bit = 1_u128 << c;
+            let mut w = 0;
             for r in 0..self.height {
-                match self.get(r, c) {
-                    Tile::Empty => (),
-                    Tile::Fixed => row_pos = r + 1,
-                    Tile::Rock => {
-                        *self.get_mut(r, c) = Tile::Empty;
-                        *self.get_mut(row_pos, c) = Tile::Rock;
-                        row_pos += 1;
-                    }
+                if (self.rows[r].fixed & bit) != 0 {
+                    w = r + 1;
+                }
+                if (self.rows[r].rocks & bit) != 0 {
+                    self.rows[r].rocks &= !bit;
+                    self.rows[w].rocks |= bit;
+                    w += 1;
                 }
             }
         }
@@ -145,64 +114,91 @@ impl Input {
 
     fn tilt_south(&mut self) {
         for c in 0..self.width {
-            let mut row_pos = self.height - 1;
+            let bit = 1_u128 << c;
+            let mut w = self.height - 1;
             for r in (0..self.height).rev() {
-                match self.get(r, c) {
-                    Tile::Empty => (),
-                    Tile::Fixed => row_pos = r.saturating_sub(1),
-                    Tile::Rock => {
-                        *self.get_mut(r, c) = Tile::Empty;
-                        *self.get_mut(row_pos, c) = Tile::Rock;
-                        row_pos = row_pos.saturating_sub(1);
-                    }
+                if (self.rows[r].fixed & bit) != 0 {
+                    w = r.saturating_sub(1);
+                }
+                if (self.rows[r].rocks & bit) != 0 {
+                    self.rows[r].rocks &= !bit;
+                    self.rows[w].rocks |= bit;
+                    w = w.saturating_sub(1);
                 }
             }
         }
     }
 
     fn tilt_west(&mut self) {
-        for r in 0..self.height {
-            let mut col_pos = 0;
-            for c in 0..self.width {
-                match self.get(r, c) {
-                    Tile::Empty => (),
-                    Tile::Fixed => col_pos = c + 1,
-                    Tile::Rock => {
-                        *self.get_mut(r, c) = Tile::Empty;
-                        *self.get_mut(r, col_pos) = Tile::Rock;
-                        col_pos += 1;
-                    }
-                }
+        for row in &mut self.rows {
+            let rocks = &mut row.rocks;
+            let mut fixed = row.fixed;
+            let mut last_fixed_bit = 1_u128;
+            while fixed != 0 {
+                let fixed_bit = 1_u128 << fixed.trailing_zeros();
+                let mask = fixed_bit - last_fixed_bit;
+                let num_rocks = (*rocks & mask).count_ones();
+                *rocks = *rocks & !mask | ((last_fixed_bit << num_rocks) - last_fixed_bit);
+                fixed &= !fixed_bit;
+                last_fixed_bit = fixed_bit << 1;
             }
+            let fixed_bit = 1_u128 << self.width;
+            let mask = fixed_bit - last_fixed_bit;
+            let num_rocks = (*rocks & mask).count_ones();
+            *rocks = *rocks & !mask | ((last_fixed_bit << num_rocks) - last_fixed_bit);
         }
     }
 
     fn tilt_east(&mut self) -> usize {
         let mut hash = 0;
-        for r in 0..self.height {
-            let mut col_pos = self.width - 1;
-            for c in (0..self.width).rev() {
-                match self.get(r, c) {
-                    Tile::Empty => (),
-                    Tile::Fixed => col_pos = c.saturating_sub(1),
-                    Tile::Rock => {
-                        *self.get_mut(r, c) = Tile::Empty;
-                        *self.get_mut(r, col_pos) = Tile::Rock;
-                        hash = (hash * HASH_FACTOR + col_pos) % HASH_MODULO;
-                        col_pos = col_pos.saturating_sub(1);
-                    }
-                }
+        for row in &mut self.rows {
+            let rocks = &mut row.rocks;
+            let mut fixed = row.fixed;
+            let mut last_fixed_bit = 1_u128;
+            while fixed != 0 {
+                let fixed_bit = 1_u128 << fixed.trailing_zeros();
+                let mask = fixed_bit - last_fixed_bit;
+                let num_rocks = (*rocks & mask).count_ones();
+                *rocks = *rocks & !mask | (fixed_bit - (fixed_bit >> num_rocks));
+                fixed &= !fixed_bit;
+                last_fixed_bit = fixed_bit;
+                hash = (hash * HASH_FACTOR + num_rocks as usize) % HASH_MODULO;
             }
+            let fixed_bit = 1_u128 << self.width;
+            let mask = fixed_bit - last_fixed_bit;
+            let num_rocks = (*rocks & mask).count_ones();
+            *rocks = *rocks & !mask | (fixed_bit - (fixed_bit >> num_rocks));
+            hash = (hash * HASH_FACTOR + num_rocks as usize) % HASH_MODULO;
         }
         hash
+    }
+
+    fn parse_line(line: &[u8]) -> Result<Row, ParseInputError> {
+        let mut row = Row { fixed: 0, rocks: 0 };
+        for (i, ch) in line.bytes().enumerate() {
+            match ch {
+                b'#' => row.fixed |= 1_u128 << i,
+                b'O' => row.rocks |= 1_u128 << i,
+                b'.' => (),
+                ch => return Err(ParseInputError::InvalidChar(ch as char)),
+            };
+        }
+        Ok(row)
     }
 }
 
 impl Display for Input {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for r in 0..self.height {
-            for tile in self.get_row(r) {
-                write!(f, "{tile}")?;
+        for row in &self.rows {
+            for c in 0..self.width {
+                let bit = 1_u128 << c;
+                if (row.fixed & bit) != 0 {
+                    write!(f, "#")?;
+                } else if (row.rocks & bit) != 0 {
+                    write!(f, "O")?;
+                } else {
+                    write!(f, ".")?;
+                }
             }
             writeln!(f)?;
         }
@@ -223,60 +219,24 @@ pub enum ParseInputError {
 impl FromStr for Input {
     type Err = ParseInputError;
 
-    fn from_str(text: &str) -> Result<Self, Self::Err> {
-        let mut height = 0;
-        let mut width = 0;
-        for line in text.lines() {
-            height += 1;
-            if height == 1 {
-                width = line.len();
-            } else if line.len() != width {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut lines = s.as_bytes().lines();
+        let first_line = lines.next().ok_or(ParseInputError::EmptyInput)?;
+        let width = first_line.len();
+        let mut rows = Vec::with_capacity(width);
+        for line in [first_line].into_iter().chain(lines) {
+            #[cfg(debug_assertions)]
+            if line.len() != width {
                 return Err(ParseInputError::UnevenRows);
             }
+            let row = Self::parse_line(line)?;
+            rows.push(row);
         }
-        if height == 0 || width == 0 {
-            return Err(ParseInputError::EmptyInput);
-        }
-        let mut tiles = Vec::with_capacity(width * height);
-        for line in text.lines() {
-            for cell in line.bytes() {
-                tiles.push(cell.try_into()?);
-            }
-        }
-        Ok(Self::new(width, height, tiles))
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-enum Tile {
-    Empty,
-    Fixed,
-    Rock,
-}
-
-impl Display for Tile {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Tile::Empty => '.',
-                Tile::Fixed => '#',
-                Tile::Rock => 'O',
-            }
-        )
-    }
-}
-
-impl TryFrom<u8> for Tile {
-    type Error = ParseInputError;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        Ok(match value {
-            b'.' => Tile::Empty,
-            b'#' => Tile::Fixed,
-            b'O' => Tile::Rock,
-            b => return Err(ParseInputError::InvalidChar(b as char)),
+        let height = rows.len();
+        Ok(Self {
+            width,
+            height,
+            rows,
         })
     }
 }
