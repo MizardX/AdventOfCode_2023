@@ -129,7 +129,7 @@ impl<'a> LaserShooter<'a> {
     pub fn new(graph: &'a MirrorGraph) -> Self {
         let visited_tiles: Vec<u128> = vec![0; graph.height];
         let visited_nodes: Vec<DirMap<bool>> = vec![DirMap::default(); graph.nodes.len()];
-        let pending: Vec<(usize, Dir)> = Vec::new();
+        let pending: Vec<(usize, Dir)> = Vec::with_capacity(64);
         Self {
             graph,
             visited_tiles,
@@ -348,11 +348,11 @@ impl FromStr for MirrorGraph {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let width = s.lines().next().unwrap().len();
-        let mut nodes: Vec<Node> = Vec::new();
+        let mut nodes: Vec<Node> = Vec::with_capacity(1238);
         let mut from_north = vec![None; width];
-        let mut from_south = from_north.clone();
-        let mut from_west = Vec::new();
-        let mut from_east = Vec::new();
+        let mut from_south = vec![None; width];
+        let mut from_west = Vec::with_capacity(width);
+        let mut from_east = Vec::with_capacity(width);
         for (r, line) in s.lines().enumerate() {
             let mut from_west_r: Option<usize> = None;
             let mut from_east_r: Option<usize> = None;
