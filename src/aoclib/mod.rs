@@ -347,7 +347,7 @@ where
         let width = first_line.len();
         let mut height = 1;
         let mut values: Vec<T> = Vec::with_capacity(width * width);
-        let mut row = [(); 140].map(|()| T::default());
+        let mut row = [(); 141].map(|()| T::default());
         for x in 0..width {
             row[x] = first_line[x].try_into()?;
         }
