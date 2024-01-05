@@ -2,7 +2,7 @@ use bstr::ByteSlice;
 use bstr_parse::{BStrParse, ParseIntError};
 use smallvec::SmallVec;
 use std::collections::HashMap;
-use std::fmt::Debug;
+use std::fmt::{Debug, Error as FmtError, Formatter};
 use std::ops::{Index, IndexMut};
 use std::str::FromStr;
 use thiserror::Error;
@@ -63,7 +63,7 @@ pub fn part_1(input: &Input) -> u64 {
 #[must_use]
 pub fn part_2(input: &Input) -> u64 {
     let mut pending: PendingVec = PendingVec::new();
-    pending.push((PartRange::default(), input.workflow_start));
+    pending.push((Part::<ValueRange>::default(), input.workflow_start));
     let mut sum_accepted = 0;
     while let Some((part_range, action)) = pending.pop() {
         match action {
@@ -81,11 +81,12 @@ type Value = u16;
 
 #[derive(Debug, Copy, Clone)]
 #[repr(u8)]
+#[allow(dead_code)]
 enum Field {
-    X = b'x',
-    M = b'm',
-    A = b'a',
-    S = b's',
+    X = b'x' & 7,
+    M = b'm' & 7,
+    A = b'a' & 7,
+    S = b's' & 7,
 }
 
 impl TryFrom<u8> for Field {
@@ -93,10 +94,7 @@ impl TryFrom<u8> for Field {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         Ok(match value {
-            b'x' => Self::X,
-            b'm' => Self::M,
-            b'a' => Self::A,
-            b's' => Self::S,
+            b'x' | b'm' | b'a' | b's' => unsafe { std::mem::transmute(value & 7) },
             ch => return Err(ParseInputError::InvalidChar(ch as char)),
         })
     }
@@ -104,9 +102,10 @@ impl TryFrom<u8> for Field {
 
 #[derive(Debug, Copy, Clone)]
 #[repr(u8)]
+#[allow(dead_code)]
 enum Condition {
-    Less = b'<',
-    Greater = b'>',
+    Less = b'<' & 2,
+    Greater = b'>' & 2,
 }
 
 impl TryFrom<u8> for Condition {
@@ -114,14 +113,13 @@ impl TryFrom<u8> for Condition {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         Ok(match value {
-            b'<' => Self::Less,
-            b'>' => Self::Greater,
+            b'<' | b'>' => unsafe { std::mem::transmute(value & 2) },
             ch => return Err(ParseInputError::InvalidChar(ch as char)),
         })
     }
 }
 
-#[derive(Debug, Copy, Clone, Default)]
+#[derive(Debug, Copy, Clone, Default, PartialEq)]
 enum Action {
     #[default]
     Accept,
@@ -147,7 +145,7 @@ impl Rule {
         }
     }
 
-    fn process(self, part: Part) -> Option<Action> {
+    fn process(self, part: Part<Value>) -> Option<Action> {
         match self.condition {
             Condition::Less if part[self.field] < self.value => Some(self.action),
             Condition::Greater if part[self.field] > self.value => Some(self.action),
@@ -155,27 +153,38 @@ impl Rule {
         }
     }
 
-    fn process_range(
-        self,
-        part_range: &PartRange,
-    ) -> (Option<(PartRange, Action)>, Option<PartRange>) {
-        // Workflow::process_range() -> Rule::process_range() -> PartRange::split() -> ValueRange::split()
+    fn process_range(self, part_range: &Part<ValueRange>) -> ProcessRangeResult {
+        // Workflow::process_range() -> Rule::process_range() -> Part<ValueRange>::split() -> ValueRange::split()
         // Rule::process_range(parts_range) -> (matched, unmatched)
         match self.condition {
             Condition::Less => {
                 let (low, high) = part_range.split(self.field, self.value);
-                (low.map(|r| (r, self.action)), high)
+                ProcessRangeResult::new(low.map(|r| (r, self.action)), high)
             }
             Condition::Greater => {
                 let (low, high) = part_range.split(self.field, self.value + 1);
-                (high.map(|r| (r, self.action)), low)
+                ProcessRangeResult::new(high.map(|r| (r, self.action)), low)
             }
         }
     }
 }
 
+struct ProcessRangeResult {
+    matched: Option<(Part<ValueRange>, Action)>,
+    unmatched: Option<Part<ValueRange>>,
+}
+
+impl ProcessRangeResult {
+    fn new(
+        matched: Option<(Part<ValueRange>, Action)>,
+        unmatched: Option<Part<ValueRange>>,
+    ) -> Self {
+        Self { matched, unmatched }
+    }
+}
+
 impl Debug for Rule {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), FmtError> {
         write!(
             f,
             "{:?} {} {} => {:?}",
@@ -190,14 +199,14 @@ struct Workflow {
     fallback: Action,
 }
 
-type PendingVec = SmallVec<[(PartRange, Action); 16]>;
+type PendingVec = SmallVec<[(Part<ValueRange>, Action); 16]>;
 
 impl Workflow {
     fn new(rules: SmallVec<[Rule; 4]>, fallback: Action) -> Self {
         Self { rules, fallback }
     }
 
-    fn process(&self, part: Part) -> Action {
+    fn process(&self, part: Part<Value>) -> Action {
         for rule in &self.rules {
             if let Some(action) = rule.process(part) {
                 return action;
@@ -206,18 +215,18 @@ impl Workflow {
         self.fallback
     }
 
-    fn process_range(&self, mut part_range: PartRange, pending: &mut PendingVec) {
-        // Workflow::process_range() -> Rule::process_range() -> PartRange::split() -> ValueRange::split()
+    fn process_range(&self, mut part_range: Part<ValueRange>, pending: &mut PendingVec) {
+        // Workflow::process_range() -> Rule::process_range() -> Part<ValueRange>::split() -> ValueRange::split()
         // Workflow::process_range(parts_range, out matched)
         for &rule in &self.rules {
-            let (matched, unmatched) = rule.process_range(&part_range);
-            if let Some((matched, action)) = matched {
+            let result = rule.process_range(&part_range);
+            if let Some((matched, action)) = result.matched {
                 pending.push((matched, action));
             }
-            if let Some(unmatched) = unmatched {
+            if let Some(unmatched) = result.unmatched {
                 part_range = unmatched;
             } else {
-                // Nothing remains of the original PartRange
+                // Nothing remains of the original Part<ValueRange>
                 return;
             }
         }
@@ -225,25 +234,32 @@ impl Workflow {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
-struct Part {
-    x: Value,
-    m: Value,
-    a: Value,
-    s: Value,
+#[derive(Debug, Copy, Clone, Default)]
+struct Part<T> {
+    x: T,
+    m: T,
+    a: T,
+    s: T,
 }
 
-impl Part {
-    fn new(x: Value, m: Value, a: Value, s: Value) -> Self {
+impl<T> Part<T> {
+    fn new(x: T, m: T, a: T, s: T) -> Self {
         Self { x, m, a, s }
     }
 
+    pub fn with(mut self, field: Field, value: T) -> Self {
+        self[field] = value;
+        self
+    }
+}
+
+impl Part<Value> {
     pub fn total_value(self) -> u64 {
         u64::from(self.x) + u64::from(self.m) + u64::from(self.a) + u64::from(self.s)
     }
 }
 
-impl<'a> TryFrom<&'a [u8]> for Part {
+impl<'a> TryFrom<&'a [u8]> for Part<Value> {
     type Error = ParseInputError;
 
     fn try_from(line: &'a [u8]) -> Result<Self, Self::Error> {
@@ -298,8 +314,8 @@ impl<'a> TryFrom<&'a [u8]> for Part {
     }
 }
 
-impl Index<Field> for Part {
-    type Output = Value;
+impl<T> Index<Field> for Part<T> {
+    type Output = T;
 
     fn index(&self, index: Field) -> &Self::Output {
         match index {
@@ -311,7 +327,7 @@ impl Index<Field> for Part {
     }
 }
 
-impl IndexMut<Field> for Part {
+impl<T> IndexMut<Field> for Part<T> {
     fn index_mut(&mut self, index: Field) -> &mut Self::Output {
         match index {
             Field::X => &mut self.x,
@@ -322,18 +338,10 @@ impl IndexMut<Field> for Part {
     }
 }
 
-#[derive(Debug, Copy, Clone, Default)]
-struct PartRange {
-    x: ValueRange,
-    m: ValueRange,
-    a: ValueRange,
-    s: ValueRange,
-}
-
-impl PartRange {
-    pub fn split(&self, field: Field, value: Value) -> (Option<PartRange>, Option<PartRange>) {
-        // Workflow::process_range() -> Rule::process_range() -> PartRange::split() -> ValueRange::split()
-        // PartRange::split(field, value) -> (below, above)
+impl Part<ValueRange> {
+    pub fn split(&self, field: Field, value: Value) -> (Option<Self>, Option<Self>) {
+        // Workflow::process_range() -> Rule::process_range() -> Part<ValueRange>::split() -> ValueRange::split()
+        // Part<ValueRange>::split(field, value) -> (below, above)
         let (low, high) = self[field].split(value);
 
         (
@@ -342,37 +350,8 @@ impl PartRange {
         )
     }
 
-    pub fn with(mut self, field: Field, value_range: ValueRange) -> Self {
-        self[field] = value_range;
-        self
-    }
-
     pub fn count(&self) -> u64 {
         self.x.count() * self.m.count() * self.a.count() * self.s.count()
-    }
-}
-
-impl Index<Field> for PartRange {
-    type Output = ValueRange;
-
-    fn index(&self, index: Field) -> &Self::Output {
-        match index {
-            Field::X => &self.x,
-            Field::M => &self.m,
-            Field::A => &self.a,
-            Field::S => &self.s,
-        }
-    }
-}
-
-impl IndexMut<Field> for PartRange {
-    fn index_mut(&mut self, index: Field) -> &mut Self::Output {
-        match index {
-            Field::X => &mut self.x,
-            Field::M => &mut self.m,
-            Field::A => &mut self.a,
-            Field::S => &mut self.s,
-        }
     }
 }
 
@@ -388,7 +367,7 @@ impl ValueRange {
     }
 
     pub fn split(self, value: Value) -> (Option<ValueRange>, Option<ValueRange>) {
-        // Workflow::process_range() -> Rule::process_range() -> PartRange::split() -> ValueRange::split()
+        // Workflow::process_range() -> Rule::process_range() -> Part<ValueRange>::split() -> ValueRange::split()
         // ValueRange::split(value) -> (below, above)
         if value <= self.start {
             (Some(self), None)
@@ -417,7 +396,7 @@ impl Default for ValueRange {
 }
 
 impl Debug for ValueRange {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), FmtError> {
         let Self { start, end } = self;
         write!(f, "{start}..{end}")
     }
@@ -493,11 +472,14 @@ impl<'a> WorkflowBuilder<'a> {
                     .ok_or(ParseInputError::InvalidRuleName)?,
             ),
         };
-        let rules = self
+        let mut rules: SmallVec<[Rule; 4]> = self
             .rules
             .iter()
             .map(|r| r.build(name_lookup))
             .collect::<Result<_, _>>()?;
+        while rules.last().is_some_and(|r| r.action == fallback) {
+            rules.pop();
+        }
         Ok(Workflow::new(rules, fallback))
     }
 }
@@ -542,7 +524,7 @@ pub enum ParseInputError {
 pub struct Input {
     workflows: Vec<Workflow>,
     workflow_start: Action,
-    parts: Vec<Part>,
+    parts: Vec<Part<Value>>,
 }
 
 impl FromStr for Input {
