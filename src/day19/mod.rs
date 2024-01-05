@@ -1,7 +1,8 @@
+use bstr::ByteSlice;
+use bstr_parse::{BStrParse, ParseIntError};
 use smallvec::SmallVec;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::num::ParseIntError;
 use std::ops::{Index, IndexMut};
 use std::str::FromStr;
 use thiserror::Error;
@@ -61,7 +62,7 @@ pub fn part_1(input: &Input) -> u64 {
 
 #[must_use]
 pub fn part_2(input: &Input) -> u64 {
-    let mut pending = Vec::new();
+    let mut pending: PendingVec = PendingVec::new();
     pending.push((PartRange::default(), input.workflow_start));
     let mut sum_accepted = 0;
     while let Some((part_range, action)) = pending.pop() {
@@ -70,7 +71,7 @@ pub fn part_2(input: &Input) -> u64 {
                 sum_accepted += part_range.count();
             }
             Action::Reject => (),
-            Action::Forward(next) => input.workflows[next].split(part_range, &mut pending),
+            Action::Forward(next) => input.workflows[next].process_range(part_range, &mut pending),
         }
     }
     sum_accepted
@@ -154,7 +155,12 @@ impl Rule {
         }
     }
 
-    fn split(self, part_range: &PartRange) -> (Option<(PartRange, Action)>, Option<PartRange>) {
+    fn process_range(
+        self,
+        part_range: &PartRange,
+    ) -> (Option<(PartRange, Action)>, Option<PartRange>) {
+        // Workflow::process_range() -> Rule::process_range() -> PartRange::split() -> ValueRange::split()
+        // Rule::process_range(parts_range) -> (matched, unmatched)
         match self.condition {
             Condition::Less => {
                 let (low, high) = part_range.split(self.field, self.value);
@@ -184,6 +190,8 @@ struct Workflow {
     fallback: Action,
 }
 
+type PendingVec = SmallVec<[(PartRange, Action); 16]>;
+
 impl Workflow {
     fn new(rules: SmallVec<[Rule; 4]>, fallback: Action) -> Self {
         Self { rules, fallback }
@@ -198,9 +206,11 @@ impl Workflow {
         self.fallback
     }
 
-    fn split(&self, mut part_range: PartRange, pending: &mut Vec<(PartRange, Action)>) {
+    fn process_range(&self, mut part_range: PartRange, pending: &mut PendingVec) {
+        // Workflow::process_range() -> Rule::process_range() -> PartRange::split() -> ValueRange::split()
+        // Workflow::process_range(parts_range, out matched)
         for &rule in &self.rules {
-            let (matched, unmatched) = rule.split(&part_range);
+            let (matched, unmatched) = rule.process_range(&part_range);
             if let Some((matched, action)) = matched {
                 pending.push((matched, action));
             }
@@ -233,29 +243,57 @@ impl Part {
     }
 }
 
-impl FromStr for Part {
-    type Err = ParseInputError;
+impl<'a> TryFrom<&'a [u8]> for Part {
+    type Error = ParseInputError;
 
-    fn from_str(line: &str) -> Result<Self, Self::Err> {
-        let rest = line
-            .strip_prefix("{x=")
-            .ok_or(ParseInputError::ExpectedChar('{'))?;
-        let (x_str, rest) = rest
-            .split_once(",m=")
+    fn try_from(line: &'a [u8]) -> Result<Self, Self::Error> {
+        // {x=1858,m=638,a=1227,s=370}
+        #[cfg(debug_assertions)]
+        if !matches!(&line[..3], b"{x=") {
+            return Err(ParseInputError::ExpectedChar('{'));
+        }
+        let comma = line[3..]
+            .find_byte(b',')
             .ok_or(ParseInputError::ExpectedChar(','))?;
+        let (x_str, line) = line[3..].split_at(comma);
         let x: Value = x_str.parse()?;
-        let (m_str, rest) = rest
-            .split_once(",a=")
+
+        #[cfg(debug_assertions)]
+        if !matches!(&line[..3], b",m=") {
+            return Err(ParseInputError::ExpectedChar(','));
+        }
+        let comma = line[3..]
+            .find_byte(b',')
             .ok_or(ParseInputError::ExpectedChar(','))?;
+        let (m_str, line) = line[3..].split_at(comma);
         let m: Value = m_str.parse()?;
-        let (a_str, rest) = rest
-            .split_once(",s=")
+
+        #[cfg(debug_assertions)]
+        if !matches!(&line[..3], b",a=") {
+            return Err(ParseInputError::ExpectedChar(','));
+        }
+        let comma = line[3..]
+            .find_byte(b',')
             .ok_or(ParseInputError::ExpectedChar(','))?;
+        let (a_str, line) = line[3..].split_at(comma);
         let a: Value = a_str.parse()?;
-        let s_str = rest
-            .strip_suffix('}')
+
+        #[cfg(debug_assertions)]
+        if !matches!(&line[..3], b",s=") {
+            return Err(ParseInputError::ExpectedChar(','));
+        }
+        let close = line[3..]
+            .find_byte(b'}')
             .ok_or(ParseInputError::ExpectedChar('}'))?;
+        let (s_str, _line) = line[3..].split_at(close);
         let s: Value = s_str.parse()?;
+
+        #[cfg(debug_assertions)]
+        #[allow(clippy::used_underscore_binding)]
+        if !matches!(_line, b"}") {
+            return Err(ParseInputError::ExpectedChar('}'));
+        }
+
         Ok(Self::new(x, m, a, s))
     }
 }
@@ -284,7 +322,7 @@ impl IndexMut<Field> for Part {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Copy, Clone, Default)]
 struct PartRange {
     x: ValueRange,
     m: ValueRange,
@@ -294,11 +332,13 @@ struct PartRange {
 
 impl PartRange {
     pub fn split(&self, field: Field, value: Value) -> (Option<PartRange>, Option<PartRange>) {
+        // Workflow::process_range() -> Rule::process_range() -> PartRange::split() -> ValueRange::split()
+        // PartRange::split(field, value) -> (below, above)
         let (low, high) = self[field].split(value);
 
         (
-            low.map(|value_range| self.clone().with(field, value_range)),
-            high.map(|value_range| self.clone().with(field, value_range)),
+            low.map(|value_range| self.with(field, value_range)),
+            high.map(|value_range| self.with(field, value_range)),
         )
     }
 
@@ -348,6 +388,8 @@ impl ValueRange {
     }
 
     pub fn split(self, value: Value) -> (Option<ValueRange>, Option<ValueRange>) {
+        // Workflow::process_range() -> Rule::process_range() -> PartRange::split() -> ValueRange::split()
+        // ValueRange::split(value) -> (below, above)
         if value <= self.start {
             (Some(self), None)
         } else if value >= self.end {
@@ -386,17 +428,17 @@ struct RuleBuilder<'a> {
     field: Field,
     condition: Condition,
     value: Value,
-    action_str: &'a str,
+    action_str: &'a [u8],
 }
 
 impl<'a> RuleBuilder<'a> {
-    pub fn build(&self, name_lookup: &HashMap<&str, usize>) -> Result<Rule, ParseInputError> {
+    pub fn build(&self, name_lookup: &HashMap<&[u8], usize>) -> Result<Rule, ParseInputError> {
         let action = match self.action_str {
-            "A" => Action::Accept,
-            "R" => Action::Reject,
+            b"A" => Action::Accept,
+            b"R" => Action::Reject,
             ref_name => Action::Forward(
                 *name_lookup
-                    .get(&ref_name)
+                    .get(ref_name)
                     .ok_or(ParseInputError::InvalidRuleName)?,
             ),
         };
@@ -404,16 +446,16 @@ impl<'a> RuleBuilder<'a> {
     }
 }
 
-// TryFrom<&str> intead of FromStr, since that trait does not preserve lifetime, and thus must be cloned
-impl<'a> TryFrom<&'a str> for RuleBuilder<'a> {
+impl<'a> TryFrom<&'a [u8]> for RuleBuilder<'a> {
     type Error = ParseInputError;
 
-    fn try_from(rule_str: &'a str) -> Result<Self, Self::Error> {
-        let rule_b = rule_str.as_bytes();
-        let field: Field = rule_b[0].try_into()?;
-        let condition: Condition = rule_b[1].try_into()?;
+    fn try_from(rule_str: &'a [u8]) -> Result<Self, Self::Error> {
+        // a>1858:kd
+        // s<173:A
+        let field: Field = rule_str[0].try_into()?;
+        let condition: Condition = rule_str[1].try_into()?;
         let (value_str, action_str) = rule_str[2..]
-            .split_once(':')
+            .split_once(|&ch| ch == b':')
             .ok_or(ParseInputError::ExpectedChar(':'))?;
         let value: Value = value_str.parse()?;
         Ok(Self {
@@ -427,13 +469,13 @@ impl<'a> TryFrom<&'a str> for RuleBuilder<'a> {
 
 #[derive(Debug, Clone)]
 struct WorkflowBuilder<'a> {
-    name: &'a str,
+    name: &'a [u8],
     rules: SmallVec<[RuleBuilder<'a>; 4]>,
-    fallback_str: &'a str,
+    fallback_str: &'a [u8],
 }
 
 impl<'a> WorkflowBuilder<'a> {
-    fn new(name: &'a str, rules: SmallVec<[RuleBuilder<'a>; 4]>, fallback_str: &'a str) -> Self {
+    fn new(name: &'a [u8], rules: SmallVec<[RuleBuilder<'a>; 4]>, fallback_str: &'a [u8]) -> Self {
         Self {
             name,
             rules,
@@ -441,13 +483,13 @@ impl<'a> WorkflowBuilder<'a> {
         }
     }
 
-    pub fn build(&self, name_lookup: &HashMap<&str, usize>) -> Result<Workflow, ParseInputError> {
+    pub fn build(&self, name_lookup: &HashMap<&[u8], usize>) -> Result<Workflow, ParseInputError> {
         let fallback = match self.fallback_str {
-            "A" => Action::Accept,
-            "R" => Action::Reject,
+            b"A" => Action::Accept,
+            b"R" => Action::Reject,
             ref_name => Action::Forward(
                 *name_lookup
-                    .get(&ref_name)
+                    .get(ref_name)
                     .ok_or(ParseInputError::InvalidRuleName)?,
             ),
         };
@@ -460,24 +502,25 @@ impl<'a> WorkflowBuilder<'a> {
     }
 }
 
-// TryFrom<&str> intead of FromStr, since that trait does not preserve lifetime, and thus must be cloned
-impl<'a> TryFrom<&'a str> for WorkflowBuilder<'a> {
+impl<'a> TryFrom<&'a [u8]> for WorkflowBuilder<'a> {
     type Error = ParseInputError;
 
-    fn try_from(line: &'a str) -> Result<Self, Self::Error> {
+    fn try_from(line: &'a [u8]) -> Result<Self, Self::Error> {
+        // tj{x<2412:qh,s<173:A,x>2448:R,R}
         let (name, mut rest) = line
-            .split_once('{')
+            .split_once(|&ch| ch == b'{')
             .ok_or(ParseInputError::ExpectedChar('{'))?;
 
         let mut rules = SmallVec::new();
-        while let Some((rule_str, tail)) = rest.split_once(',') {
+        while let Some((rule_str, tail)) = rest.split_once(|&ch| ch == b',') {
             rules.push(rule_str.try_into()?);
             rest = tail;
         }
 
         let fallback_str = rest
-            .strip_suffix('}')
-            .ok_or(ParseInputError::ExpectedChar('}'))?;
+            .split_once(|&ch| ch == b'}')
+            .ok_or(ParseInputError::ExpectedChar('}'))?
+            .0;
 
         Ok(Self::new(name, rules, fallback_str))
     }
@@ -506,9 +549,9 @@ impl FromStr for Input {
     type Err = ParseInputError;
 
     fn from_str(text: &str) -> Result<Self, Self::Err> {
-        let mut name_lookup = HashMap::new();
-        let mut workflow_builders = Vec::new();
-        let mut lines = text.lines();
+        let mut name_lookup = HashMap::with_capacity(7 << 7);
+        let mut workflow_builders = Vec::with_capacity(539);
+        let mut lines = text.as_bytes().lines();
         for line in &mut lines {
             if line.is_empty() {
                 break;
@@ -518,18 +561,18 @@ impl FromStr for Input {
             name_lookup.insert(workflow.name, index);
             workflow_builders.push(workflow);
         }
-        let workflows: Vec<Workflow> = workflow_builders
-            .iter()
-            .map(|w| w.build(&name_lookup))
-            .collect::<Result<_, _>>()?;
+        let mut workflows = Vec::with_capacity(539);
+        for builder in &workflow_builders {
+            workflows.push(builder.build(&name_lookup)?);
+        }
         let workflow_start = Action::Forward(
             *name_lookup
-                .get(&"in")
+                .get(b"in" as &[u8])
                 .ok_or(ParseInputError::InvalidRuleName)?,
         );
-        let mut parts = Vec::new();
+        let mut parts = Vec::with_capacity(200);
         for line in lines {
-            parts.push(line.parse()?);
+            parts.push(line.try_into()?);
         }
         Ok(Self {
             workflows,
