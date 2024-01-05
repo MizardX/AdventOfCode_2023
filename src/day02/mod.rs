@@ -158,7 +158,7 @@ impl FromStr for Input {
     type Err = ParseInputError;
 
     fn from_str(text: &str) -> Result<Input, Self::Err> {
-        let mut games: Vec<Game> = Vec::new();
+        let mut games: Vec<Game> = Vec::with_capacity(100);
         for line in text.as_bytes().lines() {
             games.push(line.try_into()?);
         }
