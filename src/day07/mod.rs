@@ -210,7 +210,7 @@ impl FromStr for Input {
 }
 
 fn parse_input(text: &str) -> Vec<Input> {
-    let mut res: Vec<Input> = Vec::new();
+    let mut res: Vec<Input> = Vec::with_capacity(1000);
     for line in text.lines() {
         res.push(line.parse().expect("Valid input"));
     }
