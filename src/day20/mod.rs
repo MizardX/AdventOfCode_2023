@@ -1,3 +1,4 @@
+use bstr::ByteSlice;
 use smallvec::{smallvec, SmallVec};
 use std::collections::{hash_map::Entry, HashMap, VecDeque};
 use thiserror::Error;
@@ -159,7 +160,7 @@ enum GateType {
 
 #[derive(Debug, Clone)]
 struct Gate<'a> {
-    _name: &'a str,
+    _name: &'a [u8],
     subtype: GateType,
     destinations: SmallVec<[usize; 6]>,
     sources: SmallVec<[usize; 10]>,
@@ -167,7 +168,7 @@ struct Gate<'a> {
 }
 
 impl<'a> Gate<'a> {
-    fn new(name: &'a str, subtype: GateType, destinations: SmallVec<[usize; 6]>) -> Self {
+    fn new(name: &'a [u8], subtype: GateType, destinations: SmallVec<[usize; 6]>) -> Self {
         Self {
             _name: name,
             subtype,
@@ -206,10 +207,14 @@ impl<'a> TryFrom<&'a str> for Circuit<'a> {
     type Error = ParseInputError<'a>;
 
     fn try_from(text: &'a str) -> Result<Self, Self::Error> {
-        let mut gate_builders: Vec<GateBuilder<'a>> = Vec::new();
-        let mut name_lookup = HashMap::new();
+        let mut gate_builders: Vec<GateBuilder<'a>> = Vec::with_capacity(64);
+        let mut name_lookup = HashMap::with_capacity(7 << 4);
 
-        let button = GateBuilder::new("button", GateType::Button, smallvec!["broadcaster"]);
+        let button = GateBuilder::new(
+            b"button",
+            GateType::Button,
+            smallvec![b"broadcaster" as &[u8]],
+        );
         name_lookup.insert(button.name, 0);
         gate_builders.push(button);
 
@@ -236,10 +241,10 @@ impl<'a> TryFrom<&'a str> for Circuit<'a> {
             }
         }
 
-        let mut gates: Vec<Gate<'a>> = gate_builders
-            .into_iter()
-            .map(|g: GateBuilder<'a>| g.build(&name_lookup))
-            .try_collect()?;
+        let mut gates = Vec::with_capacity(64);
+        for builder in gate_builders {
+            gates.push(builder.build(&name_lookup)?);
+        }
 
         for index in 0..gates.len() {
             for j in 0..gates[index].destinations.len() {
@@ -251,7 +256,7 @@ impl<'a> TryFrom<&'a str> for Circuit<'a> {
 
         let button_index = 0;
         let broadcast_index = gates[button_index].destinations[0];
-        let rx_index = name_lookup.get("rx").copied();
+        let rx_index = name_lookup.get(b"rx" as &[u8]).copied();
         let rx_source_index = try { gates[rx_index?].sources[0] };
         Ok(Circuit::new(
             gates,
@@ -269,17 +274,17 @@ pub enum ParseInputError<'a> {
     #[error("Expected arrow")]
     ExpectedArrow,
     #[error("Invalid name")]
-    InvalidName(&'a str),
+    InvalidName(&'a [u8]),
 }
 
 struct GateBuilder<'a> {
-    name: &'a str,
+    name: &'a [u8],
     gate_type: GateType,
-    destinations: SmallVec<[&'a str; 6]>,
+    destinations: SmallVec<[&'a [u8]; 6]>,
 }
 
 impl<'a> GateBuilder<'a> {
-    pub fn new(name: &'a str, gate_type: GateType, destinations: SmallVec<[&'a str; 6]>) -> Self {
+    pub fn new(name: &'a [u8], gate_type: GateType, destinations: SmallVec<[&'a [u8]; 6]>) -> Self {
         Self {
             name,
             gate_type,
@@ -289,7 +294,7 @@ impl<'a> GateBuilder<'a> {
 
     pub fn build(
         self,
-        name_lookup: &HashMap<&'a str, usize>,
+        name_lookup: &HashMap<&'a [u8], usize>,
     ) -> Result<Gate<'a>, ParseInputError<'a>> {
         let destinations = self
             .destinations
@@ -305,29 +310,28 @@ impl<'a> TryFrom<&'a str> for GateBuilder<'a> {
     type Error = ParseInputError<'a>;
 
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+        let value = value.as_bytes();
         if value.is_empty() {
             return Err(ParseInputError::EmptyInput);
         }
 
-        let (mut gate_type, rest) = if let Some(rest) = value.strip_prefix('%') {
-            (GateType::FlipFlop, rest)
-        } else if let Some(rest) = value.strip_prefix('&') {
-            (GateType::Conjunction, rest)
-        } else {
-            (GateType::Identity, value)
+        let (gate_type, rest) = match value {
+            [b'%', rest @ ..] => (GateType::FlipFlop, rest),
+            [b'&', rest @ ..] => (GateType::Conjunction, rest),
+            rest => (GateType::Identity, rest),
         };
 
-        let (name, rest) = rest
-            .split_once(" -> ")
-            .ok_or(ParseInputError::ExpectedArrow)?;
+        let spc = rest.find_byte(b' ').ok_or(ParseInputError::ExpectedArrow)?;
+        let (name, rest) = rest.split_at(spc);
+        #[cfg(debug_assertions)]
+        if !matches!(&rest[..4], b" -> ") {
+            return Err(ParseInputError::ExpectedArrow);
+        }
+        let rest = &rest[4..];
 
         let mut destinations = SmallVec::new();
-        for piece in rest.split(", ") {
-            destinations.push(piece);
-        }
-
-        if matches!(gate_type, GateType::Identity) && name != "broadcaster" {
-            gate_type = GateType::Identity;
+        for piece in rest.split(|&ch| ch == b',') {
+            destinations.push(piece.trim_ascii());
         }
 
         Ok(Self::new(name, gate_type, destinations))
