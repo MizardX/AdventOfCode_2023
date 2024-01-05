@@ -300,7 +300,7 @@ impl<'a> GateBuilder<'a> {
             .destinations
             .iter()
             .map(|n| Ok(*name_lookup.get(n).ok_or(ParseInputError::InvalidName(n))?))
-            .collect::<Result<_, _>>()?;
+            .try_collect()?;
 
         Ok(Gate::new(self.name, self.gate_type, destinations))
     }

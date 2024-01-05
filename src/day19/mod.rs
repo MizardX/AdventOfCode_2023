@@ -476,7 +476,7 @@ impl<'a> WorkflowBuilder<'a> {
             .rules
             .iter()
             .map(|r| r.build(name_lookup))
-            .collect::<Result<_, _>>()?;
+            .try_collect()?;
         while rules.last().is_some_and(|r| r.action == fallback) {
             rules.pop();
         }

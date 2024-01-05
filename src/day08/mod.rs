@@ -159,7 +159,7 @@ impl FromStr for Input {
             .iter()
             .copied()
             .map(Dir::try_from)
-            .collect::<Result<Vec<_>, _>>()?;
+            .try_collect()?;
         match lines.next() {
             Some([]) => (),
             _ => return Err(ParseInputError::MissingSeparatorLine),
