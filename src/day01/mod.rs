@@ -249,7 +249,7 @@ pub struct Input<'a> {
 }
 
 fn parse_input(text: &str) -> Vec<Input> {
-    let mut res: Vec<Input> = Vec::new();
+    let mut res: Vec<Input> = Vec::with_capacity(1000);
     for line in text.as_bytes().lines() {
         res.push(Input { line });
     }
