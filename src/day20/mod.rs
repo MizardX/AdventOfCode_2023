@@ -1,6 +1,7 @@
 use bstr::ByteSlice;
 use smallvec::{smallvec, SmallVec};
 use std::collections::{hash_map::Entry, HashMap, VecDeque};
+use std::fmt::Debug;
 use thiserror::Error;
 
 use crate::aoclib::lcm;
@@ -50,6 +51,52 @@ pub fn part_1(input: &Circuit) -> usize {
 
 #[must_use]
 pub fn part_2(input: &Circuit) -> usize {
+    // The input describes four counters with individual cutoff values. When all FlipFlops
+    // connected to a Conjunction become low, the Conjunction will trigger and reset that counter
+    // to zero. Each flip-flop contributes a value equal to 2 to the power of their distance from
+    // the broadcast.
+    // See <day19.dot.svg> for a diagram.
+    // Follow Identity and Flip-Flops to determine which flip-flops contribute to the final
+    // values, and their contribution.
+    let mut pending = SmallVec::<[_; 8]>::new();
+    let mut values = SmallVec::<[_; 4]>::new();
+    pending.push((input.broadcast_index, 0, 0));
+    while let Some((gate_ix, contribution, counter_ix)) = pending.pop() {
+        match input.gates[gate_ix].subtype {
+            GateType::FlipFlop => {
+                if input.gates[gate_ix]
+                        .destinations
+                        .iter()
+                        .any(|&ix2| matches!(input.gates[ix2].subtype, GateType::Conjunction))
+                {
+                    // FlipFlop is connected to a Conjections, so it contributes to one of the final values.
+                    values[counter_ix] += contribution;
+                }
+                // The next FlipFlop would contribute twice as much
+                for &dest_ix in &input.gates[gate_ix].destinations {
+                    pending.push((dest_ix, contribution * 2, counter_ix));
+                }
+            }
+            GateType::Identity => {
+                if !values.is_empty() {
+                    break; // Another broadcaster?
+                }
+                // The broadcaster is connected to the first FlipFlop in each counter component.
+                for (counter_ix, &dest_ix) in input.gates[gate_ix].destinations.iter().enumerate() {
+                    values.push(0);
+                    pending.push((dest_ix, 1, counter_ix));
+                }
+            }
+            _ => (),
+        }
+    }
+
+    if values.iter().copied().min() > Some(0) {
+        // All counters matched the pattern. We don't need to simulate the circuit.
+        return values.iter().copied().reduce(lcm).unwrap_or(0);
+    }
+
+    // Fallback if that didn't work: Simulate the circuit until all terminators gets triggered once.
     let mut simulator = CircuitSimulator::new(input);
     loop {
         simulator.press_button_once();
@@ -103,7 +150,7 @@ impl<'a> CircuitSimulator<'a> {
         let Some((source, destination, is_high)) = self.pending.pop_front() else {
             return false;
         };
-        let module = &self.circuit.modules[destination];
+        let module = &self.circuit.gates[destination];
         let sent_signal = match (module.subtype, is_high) {
             (GateType::Button, _) => Some(false),
             (GateType::Identity, is_high) => Some(is_high),
@@ -138,7 +185,7 @@ impl<'a> CircuitSimulator<'a> {
         }
 
         if is_high && Some(destination) == self.circuit.rx_source_index {
-            let source_index = self.circuit.modules[destination]
+            let source_index = self.circuit.gates[destination]
                 .sources
                 .iter()
                 .position(|&i| i == source)
@@ -158,9 +205,9 @@ enum GateType {
     Conjunction,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct Gate<'a> {
-    _name: &'a [u8],
+    name: &'a [u8],
     subtype: GateType,
     destinations: SmallVec<[usize; 6]>,
     sources: SmallVec<[usize; 10]>,
@@ -170,7 +217,7 @@ struct Gate<'a> {
 impl<'a> Gate<'a> {
     fn new(name: &'a [u8], subtype: GateType, destinations: SmallVec<[usize; 6]>) -> Self {
         Self {
-            _name: name,
+            name,
             subtype,
             destinations,
             sources: SmallVec::new(),
@@ -179,9 +226,23 @@ impl<'a> Gate<'a> {
     }
 }
 
+impl<'a> Debug for Gate<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.subtype)?;
+        f.debug_struct("")
+            .field(
+                "name",
+                &std::str::from_utf8(self.name).unwrap_or("<Utf8Error>"),
+            )
+            .field("destinations", &self.destinations)
+            .field("sources", &self.sources)
+            .finish()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Circuit<'a> {
-    modules: Vec<Gate<'a>>,
+    gates: Vec<Gate<'a>>,
     button_index: usize,
     broadcast_index: usize,
     rx_source_index: Option<usize>,
@@ -189,13 +250,13 @@ pub struct Circuit<'a> {
 
 impl<'a> Circuit<'a> {
     fn new(
-        modules: Vec<Gate<'a>>,
+        gates: Vec<Gate<'a>>,
         button_index: usize,
         broadcast_index: usize,
         rx_source_index: Option<usize>,
     ) -> Self {
         Self {
-            modules,
+            gates,
             button_index,
             broadcast_index,
             rx_source_index,
@@ -219,8 +280,8 @@ impl<'a> TryFrom<&'a str> for Circuit<'a> {
         gate_builders.push(button);
 
         for line in text.lines() {
-            let builder: GateBuilder<'a> = line.try_into()?; // TryFrom<str> for GateBuilder
             let index = gate_builders.len();
+            let builder: GateBuilder<'a> = line.try_into()?;
             name_lookup.insert(builder.name, index);
             gate_builders.push(builder);
         }
