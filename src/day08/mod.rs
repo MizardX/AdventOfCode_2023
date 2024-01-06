@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use bstr::ByteSlice;
+use smallvec::SmallVec;
 use thiserror::Error;
 
 use crate::aoclib::lcm;
@@ -96,9 +97,11 @@ pub enum ParseInputError {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[repr(u8)]
+#[allow(dead_code)]
 enum Dir {
-    Left,
-    Right,
+    Left = b'L' & 2,
+    Right = b'R' & 2,
 }
 
 impl TryFrom<u8> for Dir {
@@ -106,14 +109,13 @@ impl TryFrom<u8> for Dir {
 
     fn try_from(ch: u8) -> Result<Self, Self::Error> {
         Ok(match ch {
-            b'L' => Self::Left,
-            b'R' => Self::Right,
+            b'L' | b'R' => unsafe { std::mem::transmute(ch & 2) },
             _ => return Err(ParseInputError::InvalidInstruction(ch as char)),
         })
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy, Default)]
 struct Node {
     left_ix: usize,
     right_ix: usize,
@@ -132,11 +134,11 @@ impl Node {
 
 #[derive(Debug, Clone)]
 pub struct Input {
-    instructions: Vec<Dir>,
+    instructions: SmallVec<[Dir; 263]>,
     nodes: Vec<Node>,
     start_ix: usize,
     end_ix: usize,
-    start_ixs: Vec<usize>,
+    start_ixs: SmallVec<[usize; 6]>,
 }
 
 impl FromStr for Input {
@@ -153,13 +155,12 @@ impl FromStr for Input {
         }
 
         let mut lines = s.as_bytes().lines();
-        let instructions = lines
-            .next()
-            .ok_or(ParseInputError::EmptyInput)?
-            .iter()
-            .copied()
-            .map(Dir::try_from)
-            .try_collect()?;
+
+        let mut instructions = SmallVec::new();
+        for &ch in lines.next().ok_or(ParseInputError::EmptyInput)? {
+            instructions.push(Dir::try_from(ch)?);
+        }
+
         match lines.next() {
             Some([]) => (),
             _ => return Err(ParseInputError::MissingSeparatorLine),
@@ -168,7 +169,7 @@ impl FromStr for Input {
         let mut nodes = vec![Node::default(); 1 << 15];
         let mut start_ix = usize::MAX;
         let mut end_ix = usize::MAX;
-        let mut start_ixs = Vec::new();
+        let mut start_ixs = SmallVec::new();
         for line in lines {
             // AAA = (BBB, CCC)
             if line.len() != 16 {
