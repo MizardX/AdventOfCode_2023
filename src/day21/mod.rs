@@ -51,17 +51,17 @@ pub fn profile() {
 
 #[must_use]
 pub fn part_1(garden: &Garden, target_dist: usize) -> i64 {
-    plots_after_steps(garden, target_dist)
+    plots_after_steps(garden, target_dist, false)
 }
 
 #[must_use]
 pub fn part_2(garden: &Garden, target_dist: usize) -> i64 {
-    plots_after_steps(garden, target_dist)
+    plots_after_steps(garden, target_dist, true)
 }
 
 #[allow(clippy::cast_possible_wrap)]
-fn plots_after_steps(garden: &Garden, target_dist: usize) -> i64 {
-    let mut walker = Walker::new(&garden.grid, garden.start_pos);
+fn plots_after_steps(garden: &Garden, target_dist: usize, large: bool) -> i64 {
+    let mut walker = Walker::new(&garden.grid, garden.start_pos, large);
     let size = garden.grid.width();
     let mut samples = Vec::with_capacity(size * 4);
     for step in 0.. {
@@ -95,11 +95,16 @@ struct Walker<'a> {
 }
 
 impl<'a> Walker<'a> {
-    pub fn new(grid: &'a Grid<Tile>, start_pos: Pos) -> Self {
-        let mut current = HashSet::new();
-        let mut current_fringe = Vec::new();
-        let next = HashSet::new();
-        let next_fringe = Vec::new();
+    pub fn new(grid: &'a Grid<Tile>, start_pos: Pos, large: bool) -> Self {
+        let (hs_capacity, vec_capacity) = if large {
+            (7 << 15, 2_000)
+        } else {
+            (7 << 10, 300)
+        };
+        let mut current = HashSet::with_capacity(hs_capacity);
+        let mut current_fringe = Vec::with_capacity(vec_capacity);
+        let next = HashSet::with_capacity(hs_capacity);
+        let next_fringe = Vec::with_capacity(vec_capacity);
         current_fringe.push(start_pos);
         current.insert(start_pos);
         Self {
@@ -191,4 +196,3 @@ impl FromStr for Garden {
         Ok(Self::new(grid, start_pos))
     }
 }
-
