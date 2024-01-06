@@ -1,0 +1,121 @@
+digraph G {
+    rankdir=LR;
+    
+    subgraph cluster_s0 {
+        peripheries=0;
+        broadcaster [ label="broadcaster" ];
+    }
+
+    subgraph cluster_1 {
+        peripheries=0;
+        gz [ label="%gz", xlabel="2⁰",   shape=rect ];
+        kb [ label="%kb", xlabel="2¹",   shape=rect ];
+        sv [ label="%sv", xlabel="2²",   shape=rect ];
+        br [ label="%br", xlabel="2³",   shape=rect ];
+        nf [ label="%nf", xlabel="2⁴",   shape=rect ];
+        nz [ label="%nz", xlabel="2⁵",   shape=rect ];
+        gm [ label="%gm", xlabel="2⁶",   shape=rect ];
+        dj [ label="%dj", xlabel="2⁷",   shape=rect ];
+        zc [ label="%zc", xlabel="2⁸",   shape=rect ];
+        jq [ label="%jq", xlabel="2⁹",   shape=rect ];
+        ng [ label="%ng", xlabel="2¹⁰",  shape=rect ];
+        jk [ label="%jk", xlabel="2¹¹",  shape=rect ];
+        bd [ label="&bd", xlabel="4027", shape=diamond ];
+
+        gz -> kb -> sv -> br -> nf -> nz -> gm -> dj -> zc -> jq -> ng -> jk [weight=1000];
+        { gz, kb, br, nf, nz, dj, zc, jq, ng, jk } -> bd [ penwidth=2 ];
+        bd -> { gm, gz, sv };
+    }
+
+    subgraph cluster_2 {
+        peripheries=0;
+        xg [ label="%xg", xlabel="2⁰",   shape=rect ];
+        cf [ label="%cf", xlabel="2¹",   shape=rect ];
+        gj [ label="%gj", xlabel="2²",   shape=rect ];
+        zd [ label="%zd", xlabel="2³",   shape=rect ];
+        jv [ label="%jv", xlabel="2⁴",   shape=rect ];
+        sp [ label="%sp", xlabel="2⁵",   shape=rect ];
+        pc [ label="%pc", xlabel="2⁶",   shape=rect ];
+        kt [ label="%kt", xlabel="2⁷",   shape=rect ];
+        lt [ label="%lt", xlabel="2⁸",   shape=rect ];
+        mx [ label="%mx", xlabel="2⁹",   shape=rect ];
+        nr [ label="%nr", xlabel="2¹⁰",  shape=rect ];
+        vf [ label="%vf", xlabel="2¹¹",  shape=rect ];
+        pm [ label="&pm", xlabel="3919", shape=diamond ];
+
+        xg -> cf -> gj -> zd -> jv -> sp -> pc -> kt -> lt -> mx -> nr -> vf [weight=1000];
+        { xg, cf, gj, zd, pc, lt, mx, nr, vf } -> pm [ penwidth=2 ];
+        pm -> { kt, xg, jv, sp };
+    }
+
+    subgraph cluster_3 {
+        peripheries=0;
+        cd [ label="%cd", xlabel="2⁰",   shape=rect ];
+        nl [ label="%nl", xlabel="2¹",   shape=rect ];
+        pj [ label="%pj", xlabel="2²",   shape=rect ];
+        mj [ label="%mj", xlabel="2³",   shape=rect ];
+        qr [ label="%qr", xlabel="2⁴",   shape=rect ];
+        gk [ label="%gk", xlabel="2⁵",   shape=rect ];
+        ln [ label="%ln", xlabel="2⁶",   shape=rect ];
+        zr [ label="%zr", xlabel="2⁷",   shape=rect ];
+        cq [ label="%cq", xlabel="2⁸",   shape=rect ];
+        cj [ label="%cj", xlabel="2⁹",   shape=rect ];
+        nt [ label="%nt", xlabel="2¹⁰",  shape=rect ];
+        mn [ label="%mn", xlabel="2¹¹",  shape=rect ];
+        cc [ label="&cc", xlabel="3917", shape=diamond ];
+
+        cd -> nl -> pj -> mj -> qr -> gk -> ln -> zr -> cq -> cj -> nt -> mn [weight=1000];
+        { cd, pj, mj, ln, cq, cj, nt, mn } -> cc [ penwidth=2 ];
+        cc -> { cd, qr, nl, gk, zr };
+    }
+
+    subgraph cluster_4 {
+        peripheries=0;
+        sg [ label="%sg", xlabel="2⁰",   shape=rect ];
+        rh [ label="%rh", xlabel="2¹",   shape=rect ];
+        nb [ label="%nb", xlabel="2²",   shape=rect ];
+        sl [ label="%sl", xlabel="2³",   shape=rect ];
+        kx [ label="%kx", xlabel="2⁴",   shape=rect ];
+        jx [ label="%jx", xlabel="2⁵",   shape=rect ];
+        rt [ label="%rt", xlabel="2⁶",   shape=rect ];
+        qq [ label="%qq", xlabel="2⁷",   shape=rect ];
+        hd [ label="%hd", xlabel="2⁸",   shape=rect ];
+        qs [ label="%qs", xlabel="2⁹",   shape=rect ];
+        cl [ label="%cl", xlabel="2¹⁰",  shape=rect ];
+        zx [ label="%zx", xlabel="2¹¹",  shape=rect ];
+        rs [ label="&rs", xlabel="4003", shape=diamond ];
+
+        sg -> rh -> nb -> sl -> kx -> jx -> rt -> qq -> hd -> qs -> cl -> zx [weight=1000];
+        { sg, rh, jx, qq, hd, qs, cl, zx } -> rs [ penwidth=2 ];
+        rs -> { sg, sl, kx, nb, rt };
+    }
+
+
+    subgraph cluster_e1 {
+        peripheries=0;
+        dd [ label="&dd", shape=diamond ];
+        fh [ label="&fh", shape=diamond ];
+        xp [ label="&xp", shape=diamond ];
+        fc [ label="&fc", shape=diamond ];
+
+    }
+
+    subgraph cluster_e2 {
+        peripheries=0;
+        dn [ label="&dn", shape=diamond ];
+
+    }
+
+    subgraph cluster_e3 {
+        peripheries=0;
+        rx [ label="rx" ];
+
+    }
+    
+    broadcaster -> { gz, xg, cd, sg };
+    rs -> dd;
+    bd -> fh;
+    pm -> xp;
+    cc -> fc;
+    { dd, fh, xp, fc } -> dn -> rx;
+}
