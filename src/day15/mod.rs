@@ -165,7 +165,7 @@ impl FromStr for Input {
     type Err = ParseInputError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut steps = Vec::new();
+        let mut steps = Vec::with_capacity(4000);
         for description in s.as_bytes().split(|&ch| ch == b',') {
             steps.push(description.try_into()?);
         }
