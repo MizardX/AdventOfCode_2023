@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use std::fmt::Debug;
-use std::num::{ParseFloatError, ParseIntError};
+use std::num::{IntErrorKind, ParseFloatError, ParseIntError};
 use std::ops::{Add, Div, Index, IndexMut, Mul, Sub};
 use std::str::FromStr;
 
@@ -420,6 +420,8 @@ pub enum CommonParseError {
     #[error("Invalid integer: {0:?}")]
     InvalidInteger(#[from] ParseIntError),
     #[error("Invalid integer: {0:?}")]
+    InvalidInteger2(#[from] ParseIntError2),
+    #[error("Invalid integer: {0:?}")]
     InvalidFloat(#[from] ParseFloatError),
 }
 
@@ -469,23 +471,22 @@ where
     }
 }
 
-impl<T> FromStr for Coordinate<T>
+impl<'a, T> TryFrom<&'a [u8]> for Coordinate<T>
 where
-    T: FromStr,
-    CommonParseError: From<T::Err>,
+    T: PrimInt,
 {
-    type Err = CommonParseError;
+    type Error = CommonParseError;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (x_str, rest) = s
-            .split_once(',')
+    fn try_from(s: &'a [u8]) -> Result<Self, Self::Error> {
+        let comma1 = s
+            .find_byte(b',')
             .ok_or(CommonParseError::ExpectedChar(','))?;
-        let (y_str, z_str) = rest
-            .split_once(',')
+        let comma2 = s[comma1 + 1..]
+            .find_byte(b',')
             .ok_or(CommonParseError::ExpectedChar(','))?;
-        let x = x_str.trim().parse()?;
-        let y = y_str.trim().parse()?;
-        let z = z_str.trim().parse()?;
+        let x = parse_int(&s[..comma1])?;
+        let y = parse_int(&s[comma1 + 1..comma1 + 1 + comma2])?;
+        let z = parse_int(&s[comma1 + comma2 + 2..])?;
         Ok(Self::new(x, y, z))
     }
 }
@@ -546,6 +547,97 @@ where
             x: self.x / rhs,
             y: self.y / rhs,
             z: self.z / rhs,
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+#[error("Invalid integer")]
+pub struct ParseIntError2 {
+    pub kind: IntErrorKind,
+}
+
+impl ParseIntError2 {
+    fn new(kind: IntErrorKind) -> Self {
+        Self { kind }
+    }
+}
+
+pub fn parse_int<T: PrimInt>(s: &[u8]) -> Result<T, ParseIntError2> {
+    parse_int_radix(s, T::from(10_u8).unwrap())
+}
+
+pub fn parse_int_radix<T: PrimInt>(mut s: &[u8], base: T) -> Result<T, ParseIntError2> {
+    debug_assert!(
+        base <= T::from(10).unwrap(),
+        "Bases above 10 is not implemented"
+    );
+    debug_assert!(base >= T::from(2).unwrap(), "Bases below 2 is not invalid");
+    loop {
+        match s {
+            [] | [b'-'] => return Err(ParseIntError2::new(IntErrorKind::Empty)),
+            [b' ', rest @ ..] => s = rest,
+            [b'-', dig @ b'0'..=b'9', rest @ ..] => {
+                let dig = T::from(dig - b'0').unwrap();
+                #[cfg(debug_assertions)]
+                if dig >= base {
+                    return Err(ParseIntError2::new(IntErrorKind::InvalidDigit));
+                }
+                let mut value = T::zero()
+                    .checked_sub(&dig)
+                    .ok_or(ParseIntError2::new(IntErrorKind::NegOverflow))?;
+                s = rest;
+                loop {
+                    match s {
+                        [] => return Ok(value),
+                        [dig @ b'0'..=b'9', rest @ ..] => {
+                            let dig = T::from(dig - b'0').unwrap();
+                            #[cfg(debug_assertions)]
+                            if dig >= base {
+                                return Err(ParseIntError2::new(IntErrorKind::InvalidDigit));
+                            }
+                            s = rest;
+                            value = value
+                                .checked_mul(&base)
+                                .ok_or(ParseIntError2::new(IntErrorKind::NegOverflow))?
+                                .checked_sub(&dig)
+                                .ok_or(ParseIntError2::new(IntErrorKind::NegOverflow))?;
+                        }
+                        rest if rest.find_not_byteset(b" ").is_none() => return Ok(value),
+                        _ => return Err(ParseIntError2::new(IntErrorKind::InvalidDigit)),
+                    }
+                }
+            }
+            [dig @ b'0'..=b'9', rest @ ..] => {
+                let dig = T::from(dig - b'0').unwrap();
+                #[cfg(debug_assertions)]
+                if dig >= base {
+                    return Err(ParseIntError2::new(IntErrorKind::InvalidDigit));
+                }
+                let mut value = dig;
+                s = rest;
+                loop {
+                    match s {
+                        [] => return Ok(value),
+                        [dig @ b'0'..=b'9', rest @ ..] => {
+                            let dig = T::from(dig - b'0').unwrap();
+                            #[cfg(debug_assertions)]
+                            if dig >= base {
+                                return Err(ParseIntError2::new(IntErrorKind::InvalidDigit));
+                            }
+                            s = rest;
+                            value = value
+                                .checked_mul(&base)
+                                .ok_or(ParseIntError2::new(IntErrorKind::NegOverflow))?
+                                .checked_add(&dig)
+                                .ok_or(ParseIntError2::new(IntErrorKind::NegOverflow))?;
+                        }
+                        rest if rest.find_not_byteset(b" ").is_none() => return Ok(value),
+                        _ => return Err(ParseIntError2::new(IntErrorKind::InvalidDigit)),
+                    }
+                }
+            }
+            _ => return Err(ParseIntError2::new(IntErrorKind::InvalidDigit)),
         }
     }
 }

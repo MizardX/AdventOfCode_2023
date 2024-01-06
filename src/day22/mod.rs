@@ -1,3 +1,4 @@
+use bstr::ByteSlice;
 use smallvec::SmallVec;
 use std::fmt::Debug;
 use std::num::ParseIntError;
@@ -216,15 +217,15 @@ impl Debug for Piece {
     }
 }
 
-impl FromStr for Piece {
-    type Err = ParseInputError;
+impl<'a> TryFrom<&'a [u8]> for Piece {
+    type Error = ParseInputError;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (start_str, end_str) = s
-            .split_once('~')
+    fn try_from(s: &'a [u8]) -> Result<Self, Self::Error> {
+        let tilde = s
+            .find_byte(b'~')
             .ok_or(ParseInputError::ExpectedChar('~'))?;
-        let start: Coordinate = start_str.parse()?;
-        let end: Coordinate = end_str.parse()?;
+        let start: Coordinate = s[..tilde].try_into()?;
+        let end: Coordinate = s[tilde + 1..].try_into()?;
         debug_assert!(start.x <= end.x);
         debug_assert!(start.y <= end.y);
         debug_assert!(start.z <= end.z);
@@ -252,8 +253,8 @@ impl FromStr for Board {
         let mut min = Coordinate::new(u16::MAX, u16::MAX, u16::MAX);
         let mut max = Coordinate::new(u16::MIN, u16::MIN, u16::MIN);
         let mut pieces = Vec::with_capacity(1400);
-        for line in text.lines() {
-            let piece: Piece = line.parse()?;
+        for line in text.as_bytes().lines() {
+            let piece: Piece = line.try_into()?;
             min = min.min_fields(piece.low);
             max = max.max_fields(piece.high);
             pieces.push(piece);

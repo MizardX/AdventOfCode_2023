@@ -131,8 +131,8 @@ impl FromStr for Hail {
             .split_once('@')
             .ok_or(ParseInputError::ExpectedChar('@'))?;
         Ok(Self {
-            position: pos_str.parse()?,
-            velocity: vel_str.parse()?,
+            position: pos_str.as_bytes().try_into()?,
+            velocity: vel_str.as_bytes().try_into()?,
         })
     }
 }
