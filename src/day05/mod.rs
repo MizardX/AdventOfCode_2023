@@ -1,8 +1,9 @@
 use bstr::ByteSlice;
-use bstr_parse::{BStrParse, ParseIntError};
 use std::cmp::Ordering;
 use std::fmt::Debug;
 use thiserror::Error;
+
+use crate::aoclib::{parse_int, ParseIntError2};
 
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
@@ -71,7 +72,11 @@ pub fn part_2(input: &Input) -> isize {
                 _ => (),
             }
         }
-        if input.seed_ranges.binary_search_by(|r| r.cmp_value(cur)).is_ok() {
+        if input
+            .seed_ranges
+            .binary_search_by(|r| r.cmp_value(cur))
+            .is_ok()
+        {
             return location;
         }
         location += min_delta;
@@ -210,7 +215,7 @@ enum ParseError {
     #[error("The third number, length, is missing.")]
     MissingLen,
     #[error("One of the numbers could not be parsed as an integer: {0}")]
-    NotInteger(#[from] ParseIntError),
+    NotInteger(#[from] ParseIntError2),
     #[error("The line contains more values than expected")]
     #[cfg(debug_assertions)]
     ExtraneousValues,
@@ -221,9 +226,9 @@ impl<'a> TryFrom<&'a [u8]> for Mapping {
 
     fn try_from(s: &'a [u8]) -> Result<Self, Self::Error> {
         let mut it = s.split(|&ch| ch == b' ');
-        let destination_start: isize = it.next().ok_or(ParseError::MissingDestination)?.parse()?;
-        let source_start: isize = it.next().ok_or(ParseError::MissingSource)?.parse()?;
-        let len: isize = it.next().ok_or(ParseError::MissingLen)?.parse()?;
+        let destination_start: isize = parse_int(it.next().ok_or(ParseError::MissingDestination)?)?;
+        let source_start: isize = parse_int(it.next().ok_or(ParseError::MissingSource)?)?;
+        let len: isize = parse_int(it.next().ok_or(ParseError::MissingLen)?)?;
         #[cfg(debug_assertions)]
         if it.next().is_some() {
             return Err(ParseError::ExtraneousValues);
@@ -253,11 +258,11 @@ fn parse_input(text: &str) -> Result<Input, ParseError> {
     }
     let mut seeds = Vec::with_capacity(20);
     for num_str in first_line[7..].split(|&ch| ch == b' ') {
-        seeds.push(num_str.parse()?);
+        seeds.push(parse_int(num_str)?);
     }
-    let mut seed_ranges = Vec::with_capacity(seeds.len()/2);
-    for &[a,b] in seeds.array_chunks() {
-        seed_ranges.push(Range::new(a,b));
+    let mut seed_ranges = Vec::with_capacity(seeds.len() / 2);
+    for &[a, b] in seeds.array_chunks() {
+        seed_ranges.push(Range::new(a, b));
     }
     seed_ranges.sort_unstable();
 

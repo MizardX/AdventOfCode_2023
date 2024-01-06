@@ -1,8 +1,9 @@
 use bstr::ByteSlice;
-use bstr_parse::{BStrParse, ParseIntError};
 use num_traits::Num;
 use smallvec::SmallVec;
 use thiserror::Error;
+
+use crate::aoclib::{parse_int, ParseIntError2};
 
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
@@ -79,7 +80,7 @@ pub struct Input {
 #[derive(Debug, Error)]
 pub enum ParseInputError {
     #[error("Not an integer: {0}")]
-    NotAnInteger(#[from] ParseIntError),
+    NotAnInteger(#[from] ParseIntError2),
 }
 
 impl<'a> TryFrom<&'a [u8]> for Input {
@@ -95,10 +96,10 @@ impl<'a> TryFrom<&'a [u8]> for Input {
         start = 0;
         let mut values = Vec::with_capacity(count);
         while let Some(ix) = line[start..].find_byte(b' ') {
-            values.push(line[start..start + ix].parse()?);
+            values.push(parse_int(&line[start..start + ix])?);
             start += ix + 1;
         }
-        values.push(line[start..].parse()?);
+        values.push(parse_int(&line[start..])?);
         Ok(Self { values })
     }
 }

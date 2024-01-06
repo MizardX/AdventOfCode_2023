@@ -1,11 +1,12 @@
 use bstr::ByteSlice;
-use bstr_parse::{BStrParse, ParseIntError};
 use smallvec::SmallVec;
 use std::collections::HashMap;
 use std::fmt::{Debug, Error as FmtError, Formatter};
 use std::ops::{Index, IndexMut};
 use std::str::FromStr;
 use thiserror::Error;
+
+use crate::aoclib::{parse_int, ParseIntError2};
 
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
@@ -272,7 +273,7 @@ impl<'a> TryFrom<&'a [u8]> for Part<Value> {
             .find_byte(b',')
             .ok_or(ParseInputError::ExpectedChar(','))?;
         let (x_str, line) = line[3..].split_at(comma);
-        let x: Value = x_str.parse()?;
+        let x: Value = parse_int(x_str)?;
 
         #[cfg(debug_assertions)]
         if !matches!(&line[..3], b",m=") {
@@ -282,7 +283,7 @@ impl<'a> TryFrom<&'a [u8]> for Part<Value> {
             .find_byte(b',')
             .ok_or(ParseInputError::ExpectedChar(','))?;
         let (m_str, line) = line[3..].split_at(comma);
-        let m: Value = m_str.parse()?;
+        let m: Value = parse_int(m_str)?;
 
         #[cfg(debug_assertions)]
         if !matches!(&line[..3], b",a=") {
@@ -292,7 +293,7 @@ impl<'a> TryFrom<&'a [u8]> for Part<Value> {
             .find_byte(b',')
             .ok_or(ParseInputError::ExpectedChar(','))?;
         let (a_str, line) = line[3..].split_at(comma);
-        let a: Value = a_str.parse()?;
+        let a: Value = parse_int(a_str)?;
 
         #[cfg(debug_assertions)]
         if !matches!(&line[..3], b",s=") {
@@ -302,7 +303,7 @@ impl<'a> TryFrom<&'a [u8]> for Part<Value> {
             .find_byte(b'}')
             .ok_or(ParseInputError::ExpectedChar('}'))?;
         let (s_str, _line) = line[3..].split_at(close);
-        let s: Value = s_str.parse()?;
+        let s: Value = parse_int(s_str)?;
 
         #[cfg(debug_assertions)]
         #[allow(clippy::used_underscore_binding)]
@@ -436,7 +437,7 @@ impl<'a> TryFrom<&'a [u8]> for RuleBuilder<'a> {
         let (value_str, action_str) = rule_str[2..]
             .split_once(|&ch| ch == b':')
             .ok_or(ParseInputError::ExpectedChar(':'))?;
-        let value: Value = value_str.parse()?;
+        let value: Value = parse_int(value_str)?;
         Ok(Self {
             field,
             condition,
@@ -515,7 +516,7 @@ pub enum ParseInputError {
     #[error("Did not find expected char: '{0}'")]
     ExpectedChar(char),
     #[error("Not a number: {0:?}")]
-    NotANumber(#[from] ParseIntError),
+    NotANumber(#[from] ParseIntError2),
     #[error("Invalid rule name")]
     InvalidRuleName,
 }

@@ -1,9 +1,10 @@
 use bstr::ByteSlice;
-use bstr_parse::BStrParse;
 use std::str::FromStr;
 
 use smallvec::SmallVec;
 use thiserror::Error;
+
+use crate::aoclib::{ParseIntError2, parse_int};
 
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
@@ -110,7 +111,7 @@ pub enum ParseInputError {
     #[error("Expected character: {0:?}")]
     Expected(char),
     #[error(transparent)]
-    InvalidNumber(#[from] bstr_parse::ParseIntError),
+    InvalidNumber(#[from] ParseIntError2),
 }
 
 impl TryFrom<&[u8]> for Round {
@@ -123,7 +124,7 @@ impl TryFrom<&[u8]> for Round {
                 .trim_ascii_start()
                 .split_once(|&ch| ch == b' ')
                 .ok_or(ParseInputError::Expected(' '))?;
-            let num = num_str.parse::<u8>()?;
+            let num: u8 = parse_int(num_str)?;
             match color_str[0] {
                 b'r' => res.red += num,
                 b'g' => res.green += num,
@@ -143,8 +144,7 @@ impl TryFrom<&[u8]> for Game {
         let (id_str, line) = line
             .split_once(|&ch| ch == b':')
             .ok_or(ParseInputError::Expected(':'))?;
-        let id = id_str
-            .parse::<usize>()?;
+        let id: usize = parse_int(id_str)?;
         let mut rounds = SmallVec::new();
         for round_str in line.split(|&ch| ch == b';') {
             let round = round_str.try_into()?;

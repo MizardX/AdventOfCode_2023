@@ -1,6 +1,7 @@
 use bstr::ByteSlice;
-use bstr_parse::{BStrParse, ParseIntError};
 use thiserror::Error;
+
+use crate::aoclib::{parse_int, ParseIntError2};
 
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
@@ -89,7 +90,7 @@ pub enum ParseInputError {
     #[error("Missing '|' separator")]
     MissingSeparator,
     #[error(transparent)]
-    ParseIntError(#[from] ParseIntError),
+    ParseIntError(#[from] ParseIntError2),
 }
 
 fn parse_input(text: &str) -> Result<Vec<Card>, ParseInputError> {
@@ -114,13 +115,13 @@ fn parse_input(text: &str) -> Result<Vec<Card>, ParseInputError> {
         let end_have = line.len();
         let winning = (start_winning..end_winning)
             .step_by(3)
-            .map(|i| line[i..i + 2].trim_ascii_start().parse::<u8>())
+            .map(|i| parse_int::<u8>(&line[i..i + 2]))
             .try_fold(0_u128, |s, n| {
                 Result::<_, ParseInputError>::Ok(s | (1_u128 << n?))
             })?;
         let have = (start_have..end_have)
             .step_by(3)
-            .map(|i| line[i..i + 2].trim_ascii_start().parse::<u8>())
+            .map(|i| parse_int::<u8>(&line[i..i + 2]))
             .try_fold(0_u128, |s, n| {
                 Result::<_, ParseInputError>::Ok(s | (1_u128 << n?))
             })?;
@@ -140,13 +141,13 @@ fn parse_input(text: &str) -> Result<Vec<Card>, ParseInputError> {
             }
             let winning = (start_winning..end_winning)
                 .step_by(3)
-                .map(|i| line[i..i + 2].trim_ascii_start().parse::<u8>())
+                .map(|i| parse_int::<u8>(&line[i..i + 2]))
                 .try_fold(0_u128, |s, n| {
                     Result::<_, ParseInputError>::Ok(s | (1_u128 << n?))
                 })?;
             let have = (start_have..end_have)
                 .step_by(3)
-                .map(|i| line[i..i + 2].trim_ascii_start().parse::<u8>())
+                .map(|i| parse_int::<u8>(&line[i..i + 2]))
                 .try_fold(0_u128, |s, n| {
                     Result::<_, ParseInputError>::Ok(s | (1_u128 << n?))
                 })?;

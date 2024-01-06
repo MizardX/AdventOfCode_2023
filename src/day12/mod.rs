@@ -1,8 +1,9 @@
 use bstr::ByteSlice;
-use bstr_parse::{BStrParse, ParseIntError};
 use num_traits::PrimInt;
 use smallvec::SmallVec;
 use thiserror::Error;
+
+use crate::aoclib::{parse_int, ParseIntError2};
 
 const EXAMPLE: &str = include_str!("example.txt");
 const INPUT: &str = include_str!("input.txt");
@@ -63,7 +64,7 @@ pub enum ParseInputError {
     #[error("Expected character: {0}")]
     Expected(char),
     #[error(transparent)]
-    InvalidNumber(#[from] ParseIntError),
+    InvalidNumber(#[from] ParseIntError2),
 }
 
 #[derive(Debug, Clone)]
@@ -133,17 +134,17 @@ where
             };
             mask = mask | (m << shift);
             broken = broken | (b << shift);
-            shift -= 1;
+            shift = shift.saturating_sub(1);
         }
 
         let mut start = len + 1;
         while let Some(ix) = line[start..].find_byte(b',') {
-            let num: usize = line[start..start + ix].parse()?;
+            let num: usize = parse_int(&line[start..start + ix])?;
             counts.push(num);
             start += ix + 1;
         }
 
-        let num: usize = line[start..].parse()?;
+        let num: usize = parse_int(&line[start..])?;
         counts.push(num);
 
         Ok(Self {

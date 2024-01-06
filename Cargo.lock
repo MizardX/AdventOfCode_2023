@@ -13,7 +13,6 @@ name = "aoc_rust_2023"
 version = "0.1.0"
 dependencies = [
  "bstr",
- "bstr_parse",
  "divan",
  "num-traits",
  "pathfinding",
@@ -44,12 +43,6 @@ dependencies = [
  "regex-automata",
  "serde",
 ]
-
-[[package]]
-name = "bstr_parse"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "128a641dafa7c63fd3bd5cafebeaf2171655752d0b59c9f99ebf8c94fc8ba68f"
 
 [[package]]
 name = "cfg-if"
