@@ -63,13 +63,15 @@ pub fn part_2(garden: &Garden, target_dist: usize) -> i64 {
 fn plots_after_steps(garden: &Garden, target_dist: usize, large: bool) -> i64 {
     let mut walker = Walker::new(&garden.grid, garden.start_pos, large);
     let size = garden.grid.width();
-    let mut samples = Vec::with_capacity(size * 4);
+    let mut samples = Vec::with_capacity(6);
     for step in 0.. {
         if step == target_dist {
             return walker.len() as i64;
         }
         if step % size == target_dist % size {
             samples.push(walker.len() as i64);
+            // Validate that we have found four values that fit a quadratic function
+            #[cfg(debug_assertions)]
             if let [.., x1, x2, x3, x4] = samples[..] {
                 if x4 - 3 * x3 + 3 * x2 - x1 == 0 {
                     debug_assert_eq!((target_dist - step) % size, 0);
@@ -77,6 +79,18 @@ fn plots_after_steps(garden: &Garden, target_dist: usize, large: bool) -> i64 {
                     let a = x2 - 2 * x3 + x4;
                     let b = x2 - 4 * x3 + 3 * x4;
                     let c = 2 * x4;
+                    return ((a * delta + b) * delta + c) / 2;
+                }
+            }
+            // Shortcut: If validation is skipped, we then don't need the last sample.
+            // Unfortunetly, the sample input does not have the home row/col free, so we have to go a few more steps in that case.
+            #[cfg(not(debug_assertions))]
+            if garden.home_row_free || samples.len() >= 6 {
+                if let [.., x1, x2, x3] = samples[..] {
+                    let delta = ((target_dist - step) / size) as i64;
+                    let a = x1 - 2 * x2 + x3;
+                    let b = x1 - 4 * x2 + 3 * x3;
+                    let c = 2 * x3;
                     return ((a * delta + b) * delta + c) / 2;
                 }
             }
@@ -170,11 +184,17 @@ impl TryFrom<u8> for Tile {
 pub struct Garden {
     grid: Grid<Tile>,
     start_pos: Pos,
+    #[cfg_attr(debug_assertions, allow(unused))]
+    home_row_free: bool,
 }
 
 impl Garden {
-    fn new(grid: Grid<Tile>, start_pos: Pos) -> Self {
-        Self { grid, start_pos }
+    fn new(grid: Grid<Tile>, start_pos: Pos, home_row_free: bool) -> Self {
+        Self {
+            grid,
+            start_pos,
+            home_row_free,
+        }
     }
 }
 
@@ -193,6 +213,20 @@ impl FromStr for Garden {
         let mut grid: Grid<Tile> = text.parse()?;
         let start_pos = grid.position(|p| matches!(p, Tile::Start)).unwrap();
         grid.set(start_pos, Tile::GardenPlot);
-        Ok(Self::new(grid, start_pos))
+        let mut home_row_free = grid
+            .get_row(start_pos.row())
+            .unwrap()
+            .iter()
+            .all(|tile| matches!(tile, Tile::GardenPlot));
+        if home_row_free {
+            for r in 0..grid.height() {
+                #[allow(clippy::cast_possible_wrap)]
+                if let Some(Tile::Rock) = grid.get(Pos::new(r as isize, start_pos.col())) {
+                    home_row_free = false;
+                    break;
+                }
+            }
+        }
+        Ok(Self::new(grid, start_pos, home_row_free))
     }
 }
